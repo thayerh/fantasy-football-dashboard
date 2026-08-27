@@ -1,0 +1,18 @@
+[Unit]
+Description=Fantasy Football Dashboard API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+WorkingDirectory=%h/devcode/fantasy/fantasy-football-dashboard
+# Bound to loopback on purpose: the Cloudflare Tunnel is the only ingress path,
+# so nothing on the LAN can reach the app directly.
+ExecStart=/usr/bin/env uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+# uv needs a writable cache; systemd user services inherit a minimal env.
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=default.target

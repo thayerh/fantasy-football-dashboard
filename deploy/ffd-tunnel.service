@@ -1,0 +1,13 @@
+[Unit]
+Description=Cloudflare Tunnel for the dashboard
+After=network-online.target ffd-api.service
+Wants=network-online.target
+
+[Service]
+Type=exec
+ExecStart=/usr/local/bin/cloudflared tunnel --config %h/.cloudflared/config.yml run
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

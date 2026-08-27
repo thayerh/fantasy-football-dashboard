@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gameday — Members</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="argyle.css">
+<link rel="stylesheet" href="athletics.css">
+<link rel="stylesheet" href="gameday.css">
+</head>
+<body>
+<!-- ===========================================================================
+     GAMEDAY — page 1 of 2. The chosen direction, now with zero page-local CSS:
+     everything below is markup against the theme layer. See design/GAMEDAY.md.
+     ======================================================================== -->
+<header class="masthead">
+  <div class="masthead-utility">
+    <div class="chevron-plate"><img class="plate-logo" src="helmet.png" alt="" width="153" height="120"></div>
+    <nav><a href="#">League</a><a href="#">Standings</a><a href="#">Matchups</a><a href="#">Trades</a></nav>
+  </div>
+  <div class="masthead-section">
+    <span class="wordmark">Fantasy</span>
+    <nav>
+      <a href="04-gameday.html" aria-current="page">Members</a>
+      <a href="07-gameday-standings.html">Standings</a>
+      <a href="#">Rosters</a><a href="#">History</a>
+    </nav>
+  </div>
+</header>
+
+<div class="field argyle-veil">
+  <div class="wrap">
+    <div class="field-head">
+      <div>
+        <p class="kicker">Sleeper &middot; <span id="season"></span> Season</p>
+        <h1 id="league"></h1>
+        <p class="subline"><b id="teams"></b> teams &middot; Draft <b>pending</b></p>
+      </div>
+      <span class="freshness"><span class="dot"></span>Updated 4 minutes ago</span>
+    </div>
+
+    <section class="panel">
+      <div class="panel-head">
+        <span class="argyle-mark" aria-hidden="true"></span>
+        <div class="sec-head">
+          <h2>The League</h2><span class="spacer"></span>
+          <span class="meta" id="count"></span>
+        </div>
+      </div>
+      <div class="grid" id="grid"></div>
+      <div class="panel-foot">
+        <p class="note">Synced from Sleeper every 5 minutes.</p>
+        <a class="btn" href="07-gameday-standings.html">Standings</a>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script src="sample.js"></script>
+<script>
+const L = window.LEAGUE;
+league.textContent = L.league.replace(/[^\w\s]/g,'').trim();
+season.textContent = L.season; teams.textContent = L.teams;
+count.textContent = L.members.length + " members";
+grid.innerHTML = L.members.map(m=>`
+  <article class="card">
+    <img class="avatar" src="${m.avatar}" alt="">
+    <div class="body">
+      <p class="team ${m.team?'':'unset'}">${m.team ?? 'Team name not set'}</p>
+      <p class="handle">${m.name}</p>
+      ${m.owner?'<span class="tag">Commissioner</span>':''}
+    </div>
+  </article>`).join("");
+</script>
+</body></html>

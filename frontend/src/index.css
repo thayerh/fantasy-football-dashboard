@@ -1,0 +1,16 @@
+/* The app's entire stylesheet.
+ *
+ * design/ holds the theme; the app consumes it rather than keeping a copy, so
+ * there is exactly one definition of every colour, step, and component. Order
+ * is fixed and documented in design/GAMEDAY.md:
+ *
+ *   tokens → argyle → athletics → gameday
+ *
+ * There is no Tailwind. The theme is plain CSS with tokens, and mixing the two
+ * would reintroduce the stock palette the theme exists to avoid.
+ */
+@import "./styles/fonts.css";
+@import "../../design/tokens.css";
+@import "../../design/argyle.css";
+@import "../../design/athletics.css";
+@import "../../design/gameday.css";

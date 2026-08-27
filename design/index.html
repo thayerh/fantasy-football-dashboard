@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gameday — Fantasy Dashboard theme</title>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;600;700;800&family=Oswald:wght@500;600;700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="argyle.css">
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:var(--unc-white);color:var(--text-strong);
+  font-family:"Open Sans",system-ui,sans-serif;line-height:1.55}
+.band{height:16px}
+.wrap{max-width:58rem;margin:0 auto;padding:var(--space-6) var(--space-5) var(--space-8)}
+h1{font-family:"Libre Franklin",sans-serif;font-weight:800;font-size:var(--step-4);
+  letter-spacing:-.02em;margin:0 0 var(--space-3);line-height:1.05}
+.lede{font-size:var(--step-1);color:var(--text-muted);margin:0 0 var(--space-6);max-width:44ch}
+h2{font-family:"Libre Franklin",sans-serif;font-weight:700;font-size:var(--step-2);
+  margin:var(--space-7) 0 var(--space-3);letter-spacing:-.015em}
+.dirs{display:grid;gap:var(--space-5);grid-template-columns:repeat(auto-fit,minmax(16rem,1fr))}
+.dir{border:1px solid var(--border-subtle);border-radius:var(--radius-md);overflow:hidden;
+  display:flex;flex-direction:column;text-decoration:none;color:inherit;
+  transition:box-shadow var(--dur) var(--ease),border-color var(--dur) var(--ease)}
+.dir:hover{box-shadow:var(--shadow-md);border-color:var(--unc-carolina)}
+.swatch{height:96px;display:flex;align-items:flex-end;padding:var(--space-3)}
+.s1{background:var(--unc-white);border-bottom:3px solid var(--unc-navy)}
+.s2{background:var(--unc-navy)}
+.s3{background:var(--unc-carolina)}
+.dir-body{padding:var(--space-4);flex:1}
+.dir h3{font-family:"Libre Franklin",sans-serif;font-weight:800;font-size:var(--step-1);
+  margin:0 0 var(--space-2)}
+.dir p{margin:0;font-size:var(--step--1);color:var(--text-muted)}
+.tag{display:inline-block;margin-top:var(--space-3);font-size:10px;font-weight:700;
+  letter-spacing:.1em;text-transform:uppercase;padding:3px 7px;border-radius:var(--radius-sm);
+  background:var(--unc-cloud);color:var(--unc-bolin-creek)}
+table{width:100%;border-collapse:collapse;font-size:var(--step--1);margin-top:var(--space-3)}
+th{text-align:left;font-weight:700;padding:var(--space-2) var(--space-3);
+  border-bottom:2px solid var(--unc-carolina);font-size:var(--step--1)}
+td{padding:var(--space-2) var(--space-3);border-bottom:1px solid var(--unc-franklin-fog);
+  vertical-align:top}
+td.num{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.chip{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-2px;
+  margin-right:var(--space-2);box-shadow:inset 0 0 0 1px rgba(19,41,75,.15)}
+.pass{color:var(--status-ok);font-weight:600}
+.fail{color:var(--status-error);font-weight:600}
+code{font-family:ui-monospace,monospace;font-size:.9em;background:var(--unc-franklin-fog);
+  padding:1px 5px;border-radius:var(--radius-sm)}
+</style></head>
+<body>
+<div class="band argyle-field argyle-field--band"></div>
+<div class="wrap">
+  <h1>Gameday</h1>
+  <p class="lede">Direction 4 is the chosen theme, now written down as rules and built into a
+    reusable layer. The six explorations it came out of are kept below for reference.</p>
+
+  <h2>The theme <span style="font-weight:400;color:var(--text-muted);font-size:var(--step-0)">— every page below uses it, none has any CSS of its own</span></h2>
+  <p style="margin:0 0 var(--space-4);color:var(--text-muted);max-width:60ch">
+    The rules live in <code>GAMEDAY.md</code>; <code>gameday.css</code> is their executable
+    half. Three pages with three different content shapes prove the theme repeats: if a new
+    route ever needs its own stylesheet, the theme is missing a component.</p>
+
+  <div class="dirs">
+    <a class="dir" href="04-gameday.html">
+      <div class="swatch s3" style="align-items:stretch;padding:0">
+        <div style="flex:1;background:var(--unc-carolina)"></div>
+        <div style="width:38%;background:var(--unc-navy)"></div>
+      </div>
+      <div class="dir-body">
+        <h3>Members</h3>
+        <p>Card grid, avatars, tags. The original Gameday page, rebuilt on the theme layer with its style block deleted.</p>
+        <span class="tag">.grid &middot; .card</span>
+      </div>
+    </a>
+    <a class="dir" href="07-gameday-standings.html">
+      <div class="swatch" style="background:var(--unc-carolina);align-items:stretch;padding:0;flex-direction:column;gap:3px">
+        <div style="height:34%;background:var(--unc-navy)"></div>
+        <div style="flex:1;background:var(--unc-white)"></div>
+      </div>
+      <div class="dir-body">
+        <h3>Standings</h3>
+        <p>A dense numeric table and a stat strip &mdash; the shape the theme had never been tested against. Same four stylesheets.</p>
+        <span class="tag">.stat-table &middot; .stat-strip</span>
+      </div>
+    </a>
+    <a class="dir" href="08-gameday-states.html">
+      <div class="swatch" style="background:var(--unc-carolina);align-items:stretch;padding:0;gap:3px">
+        <div style="flex:1;background:var(--unc-cloud)"></div>
+        <div style="width:26%;background:var(--unc-coastal-sand)"></div>
+      </div>
+      <div class="dir-body">
+        <h3>States</h3>
+        <p>Loading, empty and error, specified once so no route improvises them &mdash; and so you can see them without breaking the API.</p>
+        <span class="tag">.skeleton &middot; .state</span>
+      </div>
+    </a>
+  </div>
+
+  <h2>Where it came from <span style="font-weight:400;color:var(--text-muted);font-size:var(--step-0)">— goheels chrome applied to the two you liked</span></h2>
+  <p style="margin:0 0 var(--space-4);color:var(--text-muted);max-width:60ch">
+    All three share the reference site's two-tier masthead, chevron plate, condensed caps,
+    and the argyle diamond cluster used as a section ornament rather than a background.
+    They differ in what sits underneath.</p>
+
+  <div class="dirs">
+    <a class="dir" href="04-gameday.html">
+      <div class="swatch s3" style="align-items:stretch;padding:0">
+        <div style="flex:1;background:var(--unc-carolina)"></div>
+        <div style="width:38%;background:var(--unc-navy)"></div>
+      </div>
+      <div class="dir-body">
+        <h3>4 &middot; Gameday &mdash; chosen</h3>
+        <p>Official masthead over Franklin Street's blue field and white card panels. The most energetic &mdash; reads like a team app.</p>
+        <span class="tag">goheels &times; Franklin St</span>
+      </div>
+    </a>
+    <a class="dir" href="05-kenan.html">
+      <div class="swatch" style="background:var(--unc-white);border-bottom:4px solid var(--unc-carolina);align-items:stretch;padding:0">
+        <div style="width:100%;background:var(--unc-navy);height:38%;align-self:flex-start"></div>
+      </div>
+      <div class="dir-body">
+        <h3>5 &middot; Kenan</h3>
+        <p>Official masthead over Old Well's ruled editorial list. Chrome carries the identity so the content stays quiet and dense.</p>
+        <span class="tag">goheels &times; Old Well</span>
+      </div>
+    </a>
+    <a class="dir" href="06-sideline.html">
+      <div class="swatch" style="background:var(--unc-white);align-items:stretch;padding:0;gap:4px">
+        <div style="width:32%;background:var(--unc-navy)"></div>
+        <div style="flex:1;background:var(--unc-cloud)"></div>
+      </div>
+      <div class="dir-body">
+        <h3>6 &middot; Sideline</h3>
+        <p>The reference site's actual architecture: a summary rail beside a wide primary column. Deferred &mdash; the rail is worth revisiting once there is enough content to fill it.</p>
+        <span class="tag">all three</span>
+      </div>
+    </a>
+  </div>
+
+  <h2>Originals</h2>
+  <div class="dirs">
+    <a class="dir" href="01-old-well.html">
+      <div class="swatch s1 argyle-watermark"></div>
+      <div class="dir-body">
+        <h3>1 &middot; Old Well</h3>
+        <p>Editorial collegiate. Print rules and typographic hierarchy instead of cards and shadows. Reads like a game program.</p>
+        <span class="tag">Timeless</span>
+      </div>
+    </a>
+    <a class="dir" href="02-box-score.html">
+      <div class="swatch s2"><div class="argyle-stripe" style="width:28px;height:72px"></div></div>
+      <div class="dir-body">
+        <h3>2 &middot; Box Score</h3>
+        <p>Navy broadcast stat sheet. Dense, tabular, numeric. The only direction where Carolina Blue is legible as body text.</p>
+        <span class="tag">Data-heavy</span>
+      </div>
+    </a>
+    <a class="dir" href="03-franklin-street.html">
+      <div class="swatch s3"></div>
+      <div class="dir-body">
+        <h3>3 &middot; Franklin Street</h3>
+        <p>Bright and social. Blue field, white panels, roster as cards. Closest to "clean and fun".</p>
+        <span class="tag">Playful</span>
+      </div>
+    </a>
+  </div>
+
+  <h2>Why the palette behaves the way it does</h2>
+  <p>Measured contrast ratios, not assumptions. This single table drove every layout decision above.</p>
+  <table>
+    <thead><tr><th>Foreground</th><th>On</th><th class="num">Ratio</th><th>Body text</th><th>Large text</th></tr></thead>
+    <tbody>
+      <tr><td><span class="chip" style="background:#4B9CD3"></span>Carolina Blue</td><td>White</td><td class="num">3.00</td><td class="fail">Fail</td><td class="pass">Pass</td></tr>
+      <tr><td><span class="chip" style="background:#4B9CD3"></span>Carolina Blue</td><td>Cloud</td><td class="num">2.72</td><td class="fail">Fail</td><td class="fail">Fail</td></tr>
+      <tr><td><span class="chip" style="background:#4B9CD3"></span>Carolina Blue</td><td>Navy</td><td class="num">4.84</td><td class="pass">Pass</td><td class="pass">Pass</td></tr>
+      <tr><td><span class="chip" style="background:#13294B"></span>Navy</td><td>White</td><td class="num">14.52</td><td class="pass">Pass</td><td class="pass">Pass</td></tr>
+      <tr><td><span class="chip" style="background:#2C5080"></span>Bolin Creek</td><td>White</td><td class="num">8.18</td><td class="pass">Pass</td><td class="pass">Pass</td></tr>
+      <tr><td><span class="chip" style="background:#5B6670"></span>Old Well Basin</td><td>White</td><td class="num">5.87</td><td class="pass">Pass</td><td class="pass">Pass</td></tr>
+      <tr><td><span class="chip" style="background:#A2AAAD"></span>Flat Gray</td><td>White</td><td class="num">2.36</td><td class="fail">Fail</td><td class="fail">Fail</td></tr>
+    </tbody>
+  </table>
+  <p style="margin-top:var(--space-4)">The consequence: on light backgrounds Carolina Blue is a <strong>surface and accent</strong> colour, never body text. Body text is Navy or Bolin Creek. On navy, Carolina Blue becomes a legitimate text colour. UNC's own guidance agrees &mdash; it requires Carolina Blue text to be <code>24px</code>, or <code>19px bold</code>.</p>
+
+  <h2>Files</h2>
+  <table>
+    <tbody>
+      <tr><td><code>GAMEDAY.md</code></td><td><strong>The rules.</strong> Colour, headers, fonts, layout, argyle, required states, and how to add a page.</td></tr>
+      <tr><td><code>gameday.css</code></td><td>The rules as code: page shell, panels, cards, tables, stat strips, states.</td></tr>
+      <tr><td><code>check-theme.sh</code></td><td>Mechanical enforcement &mdash; literal colour, stock palettes, gradients, page-local CSS, argyle stacking, missing states.</td></tr>
+      <tr><td><code>tokens.css</code></td><td>Every colour, type step, space step and radius. The single source of truth.</td></tr>
+      <tr><td><code>athletics.css</code></td><td>Shared goheels-derived chrome: two-tier masthead, chevron plate, section headings, buttons.</td></tr>
+      <tr><td><code>references/goheels.png</code></td><td>The source screenshot these were derived from.</td></tr>
+      <tr><td><code>argyle.css</code></td><td>Four argyle forms ranked by loudness: lattice, uniform stripe, field veil, diamond mark.</td></tr>
+      <tr><td><code>_argyle-test.html</code></td><td>Isolated pattern proofs.</td></tr>
+      <tr><td><code>sample.js</code></td><td>Real Delta Sig data, so nothing is judged on flattering placeholders.</td></tr>
+      <tr><td><code>README.md</code></td><td>Rationale, argyle rules, and how to keep this from drifting.</td></tr>
+    </tbody>
+  </table>
+</div>
+</body></html>

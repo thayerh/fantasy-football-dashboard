@@ -1,0 +1,123 @@
+/* ===========================================================================
+   Carolina argyle
+
+   Alexander Julian designed the linked-diamond motif for Dean Smith's 1991-92
+   basketball uniforms; it has been Carolina's signature ever since.
+
+   Four forms, ranked loudest to quietest. A page uses AT MOST ONE of the top
+   three, and may add .argyle-mark on top of it. Never two loud forms together.
+
+   1. .argyle-field  — a true argyle lattice: interlocking diamonds plus thin
+                       diagonal "overstitch" lines running counter to the
+                       diamond edges. The overstitch is what separates real
+                       argyle from a plain harlequin diamond grid; omit it and
+                       the pattern reads as generic.
+
+   2. .argyle-stripe — the uniform form: a single vertical chain of linked
+                       diamonds, as worn down the side of the shorts and jersey.
+
+   3. .argyle-veil   — white linework at 20% over a Carolina Blue field. The
+                       Gameday theme's standard page texture.
+
+   4. .argyle-mark   — a short run of diamonds set before a section label. The
+                       default ornament; safe on any page, including dense ones.
+
+   Diamonds are taller than wide (3:4 here). Equilateral diamonds look like a
+   argyle-adjacent harlequin print, not argyle.
+   ========================================================================= */
+
+/* --- 1. Full lattice ----------------------------------------------------- */
+.argyle-field {
+  background-color: var(--unc-navy);
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2772%27%20height%3D%2796%27%20viewBox%3D%270%200%2072%2096%27%3E%3Crect%20width%3D%2772%27%20height%3D%2796%27%20fill%3D%27%2313294B%27%2F%3E%3Cpath%20d%3D%27M0%200%20L36.0%2048.0%20L0%2096%20L-36.0%2048.0%20Z%27%20fill%3D%27%232C5080%27%2F%3E%3Cpath%20d%3D%27M72%200%20L108.0%2048.0%20L72%2096%20L36.0%2048.0%20Z%27%20fill%3D%27%232C5080%27%2F%3E%3Cpath%20d%3D%27M36.0%200%20L72%2048.0%20L36.0%2096%20L0%2048.0%20Z%27%20fill%3D%27%237BAFD4%27%2F%3E%3Cg%20stroke%3D%27%23FFFFFF%27%20stroke-width%3D%271.5%27%20opacity%3D%270.85%27%20stroke-dasharray%3D%276%206%27%20fill%3D%27none%27%3E%3Cpath%20d%3D%27M0%200%20L72%2096%27%2F%3E%3Cpath%20d%3D%27M72%200%20L0%2096%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E");
+  background-size: 72px 96px;
+}
+
+/* Light colourway, for pale headers and watermarks. */
+.argyle-field--light {
+  background-color: var(--unc-cloud);
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%2772%27%20height%3D%2796%27%20viewBox%3D%270%200%2072%2096%27%3E%3Crect%20width%3D%2772%27%20height%3D%2796%27%20fill%3D%27%23EDF5FB%27%2F%3E%3Cpath%20d%3D%27M0%200%20L36.0%2048.0%20L0%2096%20L-36.0%2048.0%20Z%27%20fill%3D%27%23DCEBF7%27%2F%3E%3Cpath%20d%3D%27M72%200%20L108.0%2048.0%20L72%2096%20L36.0%2048.0%20Z%27%20fill%3D%27%23DCEBF7%27%2F%3E%3Cpath%20d%3D%27M36.0%200%20L72%2048.0%20L36.0%2096%20L0%2048.0%20Z%27%20fill%3D%27%23B7D7ED%27%2F%3E%3Cg%20stroke%3D%27%23FFFFFF%27%20stroke-width%3D%271.5%27%20opacity%3D%271.0%27%20fill%3D%27none%27%3E%3Cpath%20d%3D%27M0%200%20L72%2096%27%2F%3E%3Cpath%20d%3D%27M72%200%20L0%2096%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E");
+  background-size: 72px 96px;
+}
+
+/* --- 2. Uniform side stripe ---------------------------------------------- */
+.argyle-stripe {
+  background-color: transparent;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='44' viewBox='0 0 28 44'%3E%3Cpath d='M14 1 L27 22 L14 43 L1 22 Z' fill='none' stroke='%237BAFD4' stroke-width='2'/%3E%3Cpath d='M14 9 L21 22 L14 35 L7 22 Z' fill='%237BAFD4' opacity='0.35'/%3E%3C/svg%3E");
+  background-size: 28px 44px;
+  background-repeat: repeat-y;
+}
+
+/* --- 3. Oversized watermark ---------------------------------------------
+   Large scale + very low contrast. At small scale a background pattern
+   fights the content; at this scale it reads as texture. */
+.argyle-watermark {
+  position: relative;
+  isolation: isolate;
+}
+.argyle-watermark::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  opacity: 1;
+  background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20width%3D%27120%27%20height%3D%27160%27%20viewBox%3D%270%200%20120%20160%27%3E%3Crect%20width%3D%27120%27%20height%3D%27160%27%20fill%3D%27%23FFFFFF%27%2F%3E%3Cpath%20d%3D%27M0%200%20L60.0%2080.0%20L0%20160%20L-60.0%2080.0%20Z%27%20fill%3D%27%23F8FBFD%27%2F%3E%3Cpath%20d%3D%27M120%200%20L180.0%2080.0%20L120%20160%20L60.0%2080.0%20Z%27%20fill%3D%27%23F8FBFD%27%2F%3E%3Cpath%20d%3D%27M60.0%200%20L120%2080.0%20L60.0%20160%20L0%2080.0%20Z%27%20fill%3D%27%23F2F8FC%27%2F%3E%3Cg%20stroke%3D%27%237BAFD4%27%20stroke-width%3D%271.5%27%20opacity%3D%270.18%27%20stroke-dasharray%3D%275%207%27%20fill%3D%27none%27%3E%3Cpath%20d%3D%27M0%200%20L120%20160%27%2F%3E%3Cpath%20d%3D%27M120%200%20L0%20160%27%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E");
+  background-size: 120px 160px;
+}
+
+/* --- Band modifier -------------------------------------------------------
+   A thin ribbon needs a smaller tile. At the default 72x96 tile a 10px band
+   shows only the diamond tips and reads as spikes rather than argyle. Scale
+   the tile down so a coherent slice of the lattice fits the band height. */
+.argyle-field--band,
+.argyle-field--light.argyle-field--band {
+  background-size: 24px 32px;
+}
+
+/* --- 5. Diamond cluster ornament -----------------------------------------
+   Borrowed from goheels.com, where a short run of argyle diamonds precedes
+   each section label ("◈◈◈◈ NEWS"). This is the most disciplined use of the
+   motif available: it reads unmistakably as Carolina at a glance, costs no
+   legibility, and scales down to a single UI element instead of taking over
+   a surface. Prefer it over background argyle for anything content-dense. */
+.argyle-mark {
+  display: inline-block;
+  width: 72px;
+  height: 18px;
+  flex: none;
+  background-repeat: repeat-x;
+  background-position: left center;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18'%3E%3Cpath d='M9 1 L17 9 L9 17 L1 9 Z' fill='none' stroke='%237BAFD4' stroke-width='1.5'/%3E%3Cpath d='M9 5 L13 9 L9 13 L5 9 Z' fill='%237BAFD4'/%3E%3C/svg%3E");
+  background-size: 18px 18px;
+}
+.argyle-mark--light {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 18 18'%3E%3Cpath d='M9 1 L17 9 L9 17 L1 9 Z' fill='none' stroke='%23B7D7ED' stroke-width='1.5'/%3E%3Cpath d='M9 5 L13 9 L9 13 L5 9 Z' fill='%23B7D7ED'/%3E%3C/svg%3E");
+}
+
+/* --- 6. Field veil -------------------------------------------------------
+   The lowest-contrast tier: white linework laid over a Carolina Blue field so
+   a large flood of brand colour reads as textile rather than as a paint slab.
+   Applied to the element itself (not a child) and drawn in ::before at .20
+   opacity, which is faint enough that white display type sits on top of it at
+   full legibility.
+
+   Tiering matters. The four argyle forms are deliberately ranked by loudness —
+   .argyle-field (lattice) > .argyle-stripe > .argyle-veil > .argyle-mark — and
+   a page may use at most ONE from the veil-or-louder group plus the mark.
+   Stacking two loud forms is what turns a motif into wallpaper. */
+.argyle-veil {
+  position: relative;
+  isolation: isolate;
+}
+.argyle-veil::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.20;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='160' viewBox='0 0 120 160'%3E%3Cpath d='M60 0 L120 80 L60 160 L0 80 Z' fill='none' stroke='%23ffffff' stroke-width='1.5'/%3E%3Cg stroke='%23ffffff' stroke-width='1' stroke-dasharray='5 7'%3E%3Cpath d='M0 0 L120 160'/%3E%3Cpath d='M120 0 L0 160'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 120px 160px;
+}
+/* Everything inside the veiled element must out-stack the texture. */
+.argyle-veil > * { position: relative; z-index: 1; }

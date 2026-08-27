@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Environment
+.env
+
+# Data — the SQLite DB and its backups are never committed
+data/*
+!data/.gitkeep
+
+# Frontend
+node_modules/
+frontend/dist/
+.playwright-mcp/
+*.tsbuildinfo

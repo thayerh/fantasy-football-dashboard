@@ -1,0 +1,15 @@
+[Unit]
+Description=Poll Sleeper every 5 minutes
+# A oneshot service cannot overlap itself, so concurrent syncs are impossible
+# by construction and the database keeps exactly one writer.
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+# Catch up after the desktop has been asleep or powered off.
+Persistent=true
+AccuracySec=30s
+Unit=ffd-sync.service
+
+[Install]
+WantedBy=timers.target

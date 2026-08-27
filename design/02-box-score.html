@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Direction 2 — Box Score</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="argyle.css">
+<style>
+/* ===========================================================================
+   DIRECTION 2 — "Box Score": broadcast stat sheet
+
+   Reference points: a basketball box score, a broadcast lower-third,
+   Sports Reference. Dense, numeric, confident.
+
+   This direction exists because of a contrast fact: Carolina Blue on navy
+   measures 4.84:1 and PASSES body text, while on white it is 3.00 and on
+   Cloud only 2.72. Going dark is the only way Carolina Blue can be a *text*
+   colour rather than merely a surface — so the dark theme is the one that
+   can actually be blue.
+
+   Numerals are IBM Plex Mono: columns of figures must align, and tabular
+   figures are the difference between a stat table and a list of numbers.
+   ========================================================================= */
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--unc-navy); color:var(--unc-white);
+  font-family:"Libre Franklin",system-ui,sans-serif; font-size:var(--step-0);
+  line-height:1.45;
+}
+.wrap{max-width:64rem;margin:0 auto;padding:var(--space-6) var(--space-5) var(--space-8)}
+
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--space-5);flex-wrap:wrap}
+.title{display:flex;align-items:center;gap:var(--space-4);min-width:0}
+/* The uniform stripe, used as the identity mark. This is the argyle's
+   original context — the side of the jersey — so it belongs here. */
+.jersey-stripe{width:28px;align-self:stretch;min-height:64px;flex:none}
+.eyebrow{
+  font-size:var(--step--1);font-weight:700;letter-spacing:.16em;
+  text-transform:uppercase;color:var(--unc-carolina);margin:0 0 4px;
+}
+h1{font-size:var(--step-3);font-weight:800;letter-spacing:-.02em;margin:0;line-height:1.05}
+
+.chip{
+  display:inline-flex;align-items:center;gap:var(--space-2);
+  border:1px solid rgba(255,255,255,.22);border-radius:var(--radius-pill);
+  padding:var(--space-2) var(--space-3);font-size:var(--step--1);
+  color:var(--unc-fordham);white-space:nowrap;
+}
+.chip .dot{width:7px;height:7px;border-radius:var(--radius-pill);background:var(--status-ok)}
+.chip.is-stale{border-color:var(--status-warn);color:var(--status-warn)}
+.chip.is-stale .dot{background:var(--status-warn)}
+
+/* Stat strip — shows how future metrics slot in without redesigning. */
+.stats{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));
+  gap:1px;background:rgba(255,255,255,.14);
+  border:1px solid rgba(255,255,255,.14);margin:var(--space-6) 0;
+}
+.stat{background:var(--unc-navy);padding:var(--space-4)}
+.stat dt{
+  font-size:var(--step--1);letter-spacing:.1em;text-transform:uppercase;
+  color:var(--unc-flat-gray);margin:0 0 var(--space-2);font-weight:600;
+}
+.stat dd{
+  margin:0;font-family:"IBM Plex Mono",monospace;font-weight:600;
+  font-size:var(--step-3);font-variant-numeric:tabular-nums;
+  color:var(--unc-carolina);line-height:1;
+}
+.stat dd .unit{font-size:var(--step-0);color:var(--unc-fordham);margin-left:4px}
+
+table{width:100%;border-collapse:collapse}
+caption{
+  text-align:left;font-size:var(--step--1);font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--unc-carolina);
+  padding-bottom:var(--space-3);border-bottom:2px solid var(--unc-carolina);
+}
+th{
+  text-align:left;font-size:var(--step--1);font-weight:600;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--unc-flat-gray);
+  padding:var(--space-3) var(--space-3);border-bottom:1px solid rgba(255,255,255,.14);
+}
+th.num,td.num{text-align:right;font-variant-numeric:tabular-nums}
+td{padding:var(--space-3);border-bottom:1px solid rgba(255,255,255,.08);vertical-align:middle}
+tbody tr:hover{background:rgba(75,156,211,.10)}
+.rank{
+  font-family:"IBM Plex Mono",monospace;font-weight:600;
+  color:var(--unc-flat-gray);font-size:var(--step-0);width:3rem;
+}
+.member{display:flex;align-items:center;gap:var(--space-3);min-width:0}
+.avatar{
+  width:32px;height:32px;border-radius:var(--radius-pill);object-fit:cover;
+  background:var(--unc-bolin-creek);flex:none;
+  box-shadow:0 0 0 1px rgba(255,255,255,.25);
+}
+.team{font-weight:700;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.team.unset{color:var(--unc-flat-gray);font-weight:400;font-style:italic}
+.handle{font-size:var(--step--1);color:var(--unc-flat-gray)}
+.tag{
+  font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--unc-navy);background:var(--unc-carolina);
+  padding:2px 6px;border-radius:var(--radius-sm);margin-left:var(--space-2);
+}
+</style></head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="title">
+      <div class="jersey-stripe argyle-stripe"></div>
+      <div>
+        <p class="eyebrow">Sleeper &middot; <span id="season"></span></p>
+        <h1 id="league"></h1>
+      </div>
+    </div>
+    <span class="chip"><span class="dot"></span>Updated 4m ago</span>
+  </header>
+
+  <dl class="stats">
+    <div class="stat"><dt>Teams</dt><dd id="teams"></dd></div>
+    <div class="stat"><dt>Named</dt><dd id="named"></dd></div>
+    <div class="stat"><dt>Status</dt><dd style="font-size:var(--step-1)">Pre-draft</dd></div>
+    <div class="stat"><dt>Sync</dt><dd>5<span class="unit">min</span></dd></div>
+  </dl>
+
+  <table>
+    <caption>League Members</caption>
+    <thead><tr>
+      <th class="num" style="width:3rem">#</th><th>Team</th><th>Manager</th><th class="num">Joined</th>
+    </tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+</div>
+<script src="sample.js"></script>
+<script>
+const L = window.LEAGUE;
+season.textContent = L.season; league.textContent = L.league; teams.textContent = L.teams;
+named.textContent = L.members.filter(m=>m.team).length;
+rows.innerHTML = L.members.map((m,i)=>`
+  <tr>
+    <td class="num rank">${String(i+1).padStart(2,'0')}</td>
+    <td><span class="team ${m.team?'':'unset'}">${m.team ?? 'Not set'}</span>${m.owner?'<span class="tag">Comm</span>':''}</td>
+    <td><div class="member"><img class="avatar" src="${m.avatar}" alt=""><span class="handle">${m.name}</span></div></td>
+    <td class="num handle">Aug 21</td>
+  </tr>`).join("");
+</script>
+</body></html>

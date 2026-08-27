@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gameday — Standings</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="argyle.css">
+<link rel="stylesheet" href="athletics.css">
+<link rel="stylesheet" href="gameday.css">
+</head>
+<body>
+<!-- ===========================================================================
+     GAMEDAY — page 2 of 2. A completely different content shape (a dense
+     numeric table instead of a card grid) built from the same theme layer with
+     no page-local CSS. This page is the proof that the theme repeats: if a new
+     route needs its own page-local CSS, the theme is missing a component and
+     gameday.css is what should change.
+     ======================================================================== -->
+<header class="masthead">
+  <div class="masthead-utility">
+    <div class="chevron-plate"><img class="plate-logo" src="helmet.png" alt="" width="153" height="120"></div>
+    <nav><a href="#">League</a><a href="#">Standings</a><a href="#">Matchups</a><a href="#">Trades</a></nav>
+  </div>
+  <div class="masthead-section">
+    <span class="wordmark">Fantasy</span>
+    <nav>
+      <a href="04-gameday.html">Members</a>
+      <a href="07-gameday-standings.html" aria-current="page">Standings</a>
+      <a href="#">Rosters</a><a href="#">History</a>
+    </nav>
+  </div>
+</header>
+
+<div class="field field--tight argyle-veil">
+  <div class="wrap">
+    <div class="field-head">
+      <div>
+        <p class="kicker">Final &middot; 2025 Season</p>
+        <h1>Standings</h1>
+        <p class="subline"><b>14</b> weeks &middot; <b>12</b> teams</p>
+      </div>
+      <span class="freshness is-stale"><span class="dot"></span>Last synced 3 days ago</span>
+    </div>
+
+    <section class="panel">
+      <div class="panel-head">
+        <span class="argyle-mark" aria-hidden="true"></span>
+        <div class="sec-head">
+          <h2>Regular Season</h2><span class="spacer"></span>
+          <span class="meta">Sorted by record</span>
+        </div>
+      </div>
+
+      <div class="stat-strip">
+        <div class="stat"><span class="figure">1,704.5</span><span class="label">High PF</span></div>
+        <div class="stat"><span class="figure">137.2</span><span class="label">Avg / week</span></div>
+        <div class="stat"><span class="figure">6</span><span class="label">Playoff spots</span></div>
+        <div class="stat"><span class="figure">28</span><span class="label">Trades</span></div>
+      </div>
+
+      <div class="table-scroll">
+        <table class="stat-table">
+          <thead>
+            <tr>
+              <th class="num">#</th><th>Team</th>
+              <th class="num">Record</th><th class="num">PF</th>
+              <th class="num">PA</th><th class="num">Streak</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+
+      <div class="panel-foot">
+        <p class="note">Figures are illustrative — the 2026 season has not started.</p>
+        <a class="btn" href="04-gameday.html">League members</a>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script src="sample.js"></script>
+<script>
+// Deterministic stand-in numbers, so the layout is judged against realistic
+// column widths (four-digit points, decimals, negative-looking streaks).
+const rows = window.LEAGUE.members.map((m, i) => ({
+  ...m,
+  wins:   12 - i,
+  losses: 2 + i,
+  pf:     (1704.5 - i * 38.2 + (i % 3) * 7.5).toFixed(1),
+  pa:     (1451.3 + i * 11.4 - (i % 4) * 9.1).toFixed(1),
+  streak: (i % 3 === 0 ? "W" : "L") + (1 + (i % 4)),
+}));
+document.getElementById("rows").innerHTML = rows.map((r, i) => `
+  <tr>
+    <td class="rank num">${i + 1}</td>
+    <td>
+      <div class="cell-team">
+        <img class="avatar avatar--sm" src="${r.avatar}" alt="">
+        <div class="who">
+          <p class="name ${r.team ? "" : "unset"}">${r.team ?? "Team name not set"}</p>
+          <p class="sub">${r.name}${r.owner ? " &middot; Commissioner" : ""}</p>
+        </div>
+      </div>
+    </td>
+    <td class="num">${r.wins}&ndash;${r.losses}</td>
+    <td class="num">${r.pf}</td>
+    <td class="num">${r.pa}</td>
+    <td class="num">${r.streak}</td>
+  </tr>`).join("");
+</script>
+</body></html>

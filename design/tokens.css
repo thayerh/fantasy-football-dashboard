@@ -1,0 +1,134 @@
+/* ===========================================================================
+   UNC Chapel Hill design tokens
+   Source: identity.unc.edu/brand/color (official brand identity guidelines)
+
+   This file is the single source of truth. Components reference var(--*)
+   and never literal hex values — that is what keeps a palette coherent as
+   the app grows.
+   ========================================================================= */
+
+:root {
+  /* --- Primary ------------------------------------------------------------
+     Brand-mandated balance: ~40% Carolina Blue, 15% Navy, 25% White,
+     15% secondary, 5% supporting. Carolina Blue must dominate. */
+  /* Chosen deliberately: the lighter, older Carolina Blue. UNC's current
+     published value is #4B9CD3 (PMS 542 C); #7BAFD4 is the value that
+     circulates on colour aggregators, and it is the one this dashboard uses
+     because it looks right to its audience.
+
+     What it costs, measured: everything ON NAVY gets better (4.84 → 6.17),
+     everything white-on-blue and blue-on-white gets worse (3.00 → 2.35). See
+     the role notes below — the "Carolina Blue is a surface, not text" rule is
+     now absolute rather than merely strong.
+
+     The argyle SVGs in argyle.css carry this hex literally, because a data URI
+     cannot reference a var(). Change both together:
+       sed -i 's/7BAFD4/NEWHEX/g' design/tokens.css design/argyle.css */
+  --unc-carolina:        #7BAFD4;
+  --unc-navy:            #13294B;  /* PMS 2767 C */
+  --unc-white:           #FFFFFF;
+
+  /* --- Secondary --------------------------------------------------------- */
+  --unc-bolin-creek:     #2C5080;  /* deep blue; the readable "blue text" */
+  --unc-fordham:         #B7D7ED;  /* pale blue */
+  --unc-cloud:           #EDF5FB;  /* near-white blue tint */
+  --unc-old-well-basin:  #5B6670;  /* warm slate; readable muted text */
+  --unc-flat-gray:       #A2AAAD;
+  --unc-cornerstone:     #CFD3D5;
+  --unc-franklin-fog:    #ECEDED;
+
+  /* --- Supporting (use sparingly — 5% of the palette) --------------------- */
+  --unc-clay:            #E95550;  /* error / danger */
+  --unc-tulip-poplar:    #FF9E1B;  /* warning / stale */
+  --unc-ginkgo:          #FFD340;
+  --unc-piedmont-pine:   #006D6A;  /* success */
+  --unc-polk-pathways:   #FBC8B6;
+  --unc-coastal-sand:    #FFEEC2;
+  --unc-amber-ink:       #7A4A00;  /* 6.51:1 on Coastal Sand — stale-state text */
+
+  /* --- Contrast-verified role tokens -------------------------------------
+     Measured, not assumed. Ratios computed against WCAG 2.1.
+
+       Carolina on white ......  2.35  FAILS every text size, and the 3:1
+                                        non-text threshold too
+       Carolina on cloud ......  2.14  FAILS everything
+       Carolina on navy .......  6.17  passes body text comfortably
+       White on Carolina ......  2.35  display type only, as a brand choice
+       Navy on Carolina .......  6.17  the readable pairing
+       Navy on white .......... 14.52
+       Bolin Creek on white ...  8.18
+       Old Well Basin on white   5.87
+
+     The rule that follows: on light backgrounds Carolina Blue is a SURFACE
+     color and nothing else — not body text, not large text, not a hairline
+     anyone has to see. On navy it becomes a legitimate text color, and a
+     strong one.
+
+     White type on the blue field is the one place the theme knowingly sits at
+     2.35. The <h1> is a defensible brand exception at 49px/700. The .kicker
+     (13px/600) and .subline (20px) beneath it are NOT — they are small text
+     below every threshold, and the honest fix is to set them in navy, which
+     scores 6.17 on this blue. Flagged rather than silently fixed, because it
+     changes how the header reads. */
+  --text-strong:      var(--unc-navy);
+  --text-muted:       var(--unc-old-well-basin);
+  --text-link:        var(--unc-bolin-creek);
+  --text-on-navy:     var(--unc-white);
+  --text-accent-dark: var(--unc-carolina);   /* only on navy */
+
+  --surface-page:     var(--unc-cloud);
+  --surface-raised:   var(--unc-white);
+  --surface-inverse:  var(--unc-navy);
+  --border-subtle:    var(--unc-cornerstone);
+  --border-strong:    var(--unc-old-well-basin);
+
+  --status-ok:        var(--unc-piedmont-pine);
+  --status-warn:      var(--unc-tulip-poplar);
+  --status-error:     var(--unc-clay);
+  --text-on-warn:     var(--unc-amber-ink);
+
+  /* --- Type scale --------------------------------------------------------
+     A fixed ratio (1.25, major third). Arbitrary one-off sizes are the most
+     common tell of an unplanned interface. */
+  --step--1: 0.8rem;
+  --step-0:  1rem;
+  --step-1:  1.25rem;
+  --step-2:  1.563rem;
+  --step-3:  1.953rem;
+  --step-4:  2.441rem;
+  --step-5:  3.052rem;
+
+  /* --- Spacing scale (4px base) ------------------------------------------ */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+
+  /* --- Radius ------------------------------------------------------------
+     Deliberately restrained and varied by role. Uniform rounding on every
+     element flattens hierarchy. */
+  --radius-sm: 2px;
+  --radius-md: 4px;
+  --radius-pill: 999px;
+
+  /* --- Elevation ---------------------------------------------------------
+     Navy-tinted rather than neutral black, so shadows belong to the palette. */
+  --shadow-sm: 0 1px 2px rgba(19, 41, 75, 0.08);
+  --shadow-md: 0 2px 8px rgba(19, 41, 75, 0.10);
+  /* Display type on the blue field: a hard navy offset, no blur — stadium
+     signage rather than a drop shadow. Lives here so no component file has to
+     carry a literal colour. */
+  --shadow-display: 0 2px 0 rgba(19, 41, 75, 0.18);
+
+  /* --- Motion ------------------------------------------------------------ */
+  --ease: cubic-bezier(0.2, 0, 0.1, 1);
+  --dur:  160ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur: 0ms; }
+}

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gameday — States</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="argyle.css">
+<link rel="stylesheet" href="athletics.css">
+<link rel="stylesheet" href="gameday.css">
+</head>
+<body>
+<!-- ===========================================================================
+     GAMEDAY — the states every page owes the user. Loading, empty, and error
+     are specified here so no route has to invent them, and so a reviewer can
+     see them without having to break the API to find out what they look like.
+     ======================================================================== -->
+<header class="masthead">
+  <div class="masthead-utility">
+    <div class="chevron-plate"><img class="plate-logo" src="helmet.png" alt="" width="153" height="120"></div>
+    <nav><a href="#">League</a><a href="#">Standings</a><a href="#">Matchups</a><a href="#">Trades</a></nav>
+  </div>
+  <div class="masthead-section">
+    <span class="wordmark">Fantasy</span>
+    <nav>
+      <a href="04-gameday.html">Members</a>
+      <a href="07-gameday-standings.html">Standings</a>
+      <a href="08-gameday-states.html" aria-current="page">States</a>
+    </nav>
+  </div>
+</header>
+
+<div class="field field--tight argyle-veil">
+  <div class="wrap">
+    <div class="field-head">
+      <div>
+        <p class="kicker">Theme &middot; Reference</p>
+        <h1>Interface States</h1>
+        <p class="subline">Loading, empty, and error &mdash; specified, not improvised.</p>
+      </div>
+    </div>
+
+    <!-- 1. Loading. The skeleton mirrors the real card so the layout does not
+            jump when data arrives. -->
+    <section class="panel">
+      <div class="panel-head">
+        <span class="argyle-mark" aria-hidden="true"></span>
+        <div class="sec-head"><h2>Loading</h2><span class="spacer"></span>
+          <span class="meta">Skeleton matches the resolved layout</span></div>
+      </div>
+      <div class="grid">
+        <article class="card"><span class="skeleton skeleton--avatar"></span>
+          <div class="body"><p class="skeleton skeleton--line"></p>
+          <p class="skeleton skeleton--line"></p></div></article>
+        <article class="card"><span class="skeleton skeleton--avatar"></span>
+          <div class="body"><p class="skeleton skeleton--line"></p>
+          <p class="skeleton skeleton--line"></p></div></article>
+        <article class="card"><span class="skeleton skeleton--avatar"></span>
+          <div class="body"><p class="skeleton skeleton--line"></p>
+          <p class="skeleton skeleton--line"></p></div></article>
+      </div>
+    </section>
+
+    <!-- 2. Empty. Says what is missing and what will fill it. -->
+    <section class="panel">
+      <div class="panel-head">
+        <span class="argyle-mark" aria-hidden="true"></span>
+        <div class="sec-head"><h2>Empty</h2></div>
+      </div>
+      <div class="state">
+        <h3>No trades yet</h3>
+        <p>Nothing has been swapped this season. Trades appear here within five
+           minutes of going through on Sleeper.</p>
+      </div>
+    </section>
+
+    <!-- 3. Error. Names the failure and the recovery, and never blames the
+            reader. The stale pill in the header is the other half of this. -->
+    <section class="panel">
+      <div class="panel-head">
+        <span class="argyle-mark" aria-hidden="true"></span>
+        <div class="sec-head"><h2>Error</h2><span class="spacer"></span>
+          <span class="freshness is-stale"><span class="dot"></span>Data may be stale</span></div>
+      </div>
+      <div class="state state--error">
+        <h3>Couldn&rsquo;t reach Sleeper</h3>
+        <p>The last sync failed at 4:12 PM. Showing the most recent data we have.
+           The next sync runs automatically in a few minutes.</p>
+      </div>
+      <div class="panel-foot">
+        <p class="note">Failures also surface in <code>/api/health</code> as <code>stale: true</code>.</p>
+        <a class="btn" href="#">Retry</a>
+      </div>
+    </section>
+  </div>
+</div>
+</body></html>

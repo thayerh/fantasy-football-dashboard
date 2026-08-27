@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Direction 5 — Kenan</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="argyle.css">
+<link rel="stylesheet" href="athletics.css">
+<style>
+/* ===========================================================================
+   DIRECTION 5 — "Kenan" = goheels chrome × Old Well
+
+   The official masthead over editorial content: white field, ruled rows,
+   typographic hierarchy instead of cards and shadows. The chrome supplies the
+   Carolina identity, so the content area is free to be quiet and dense.
+
+   This is the most restrained of the three combinations, and the one that will
+   still look considered when the page holds standings, scores and transactions
+   rather than twelve names.
+   ========================================================================= */
+*{box-sizing:border-box}
+body{margin:0;background:var(--unc-white);font-family:"Open Sans",system-ui,sans-serif;
+  color:var(--text-strong);line-height:1.5}
+.wrap{max-width:58rem;margin:0 auto;padding:0 var(--space-5)}
+
+/* A solid accent stripe under the navy bar — a jersey stripe, not a pattern.
+   Argyle appears exactly once per screen (the section-head cluster); a second
+   instance here would dilute the signature into decoration. */
+.accent-rule{height:4px;background:var(--unc-carolina)}
+
+.page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-5);
+  flex-wrap:wrap;padding:var(--space-7) 0 var(--space-5);border-bottom:3px solid var(--unc-navy)}
+.kicker{font-family:"Oswald",sans-serif;font-weight:600;font-size:var(--step--1);
+  letter-spacing:.18em;text-transform:uppercase;color:var(--unc-bolin-creek);margin:0 0 var(--space-2)}
+h1{font-family:"Oswald",sans-serif;font-weight:700;font-size:var(--step-4);line-height:1;
+  text-transform:uppercase;letter-spacing:.01em;margin:0}
+.dek{margin:var(--space-3) 0 0;color:var(--text-muted)}
+
+section{padding:var(--space-6) 0}
+.roster{list-style:none;margin:0;padding:0}
+.roster li{display:grid;grid-template-columns:2.5rem auto 1fr auto;gap:var(--space-4);
+  align-items:center;padding:var(--space-4) var(--space-2);
+  border-bottom:1px solid var(--unc-franklin-fog);transition:background var(--dur) var(--ease)}
+.roster li:hover{background:var(--unc-cloud)}
+.roster li:last-child{border-bottom:0}
+.slot{font-family:"Oswald",sans-serif;font-weight:600;font-size:var(--step-1);
+  color:var(--unc-flat-gray);font-variant-numeric:tabular-nums;text-align:right}
+.avatar{width:46px;height:46px;border-radius:var(--radius-pill);object-fit:cover;flex:none;
+  background:var(--unc-cloud);box-shadow:0 0 0 2px var(--unc-white),0 0 0 4px var(--unc-carolina)}
+.who{min-width:0}
+.team{font-family:"Oswald",sans-serif;font-weight:600;font-size:var(--step-1);line-height:1.2;
+  margin:0;letter-spacing:.01em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.team.unset{font-family:"Open Sans",sans-serif;font-weight:400;font-style:italic;
+  color:var(--unc-flat-gray);font-size:var(--step-0)}
+.handle{margin:2px 0 0;color:var(--text-muted);font-size:var(--step--1)}
+.tag{font-family:"Oswald",sans-serif;font-size:10px;font-weight:600;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--unc-navy);background:var(--unc-fordham);
+  padding:3px 8px;border-radius:var(--radius-sm);white-space:nowrap}
+
+.footnote{display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;
+  padding:var(--space-5) 0 var(--space-8);border-top:1px solid var(--unc-franklin-fog);
+  color:var(--text-muted);font-size:var(--step--1)}
+
+/* Narrow screens: truncating a team name to fit a badge loses the content
+   people actually came to read. Let it wrap and drop the badge to its own row. */
+@media (max-width:34rem){
+  .roster li{grid-template-columns:2rem auto 1fr;gap:var(--space-3)}
+  .team{white-space:normal}
+  .tag{grid-column:1 / -1;justify-self:start}
+}
+</style></head>
+<body>
+<header class="masthead">
+  <div class="masthead-utility">
+    <div class="chevron-plate"><img class="plate-logo" src="helmet.png" alt="" width="153" height="120"></div>
+    <nav><a href="#">League</a><a href="#">Standings</a><a href="#">Matchups</a><a href="#">Trades</a></nav>
+  </div>
+  <div class="masthead-section">
+    <span class="wordmark">Fantasy</span>
+    <nav>
+      <a href="#" aria-current="page">Members</a><a href="#">Draft</a>
+      <a href="#">Rosters</a><a href="#">History</a>
+    </nav>
+  </div>
+</header>
+<div class="accent-rule"></div>
+
+<div class="wrap">
+  <div class="page-head">
+    <div>
+      <p class="kicker">Sleeper &middot; <span id="season"></span> Season</p>
+      <h1 id="league"></h1>
+      <p class="dek"><span id="teams"></span> teams &middot; Draft pending</p>
+    </div>
+    <span class="freshness"><span class="dot"></span>Updated 4 minutes ago</span>
+  </div>
+
+  <section>
+    <div class="sec-head">
+      <span class="argyle-mark" aria-hidden="true"></span>
+      <h2>The League</h2><span class="spacer"></span>
+      <span class="meta" id="count"></span>
+    </div>
+    <ul class="roster" id="roster"></ul>
+  </section>
+
+  <p class="footnote">Synced from Sleeper every 5 minutes.</p>
+</div>
+
+<script src="sample.js"></script>
+<script>
+const L = window.LEAGUE;
+league.textContent = L.league.replace(/[^\w\s]/g,'').trim();
+season.textContent = L.season; teams.textContent = L.teams;
+count.textContent = L.members.length + " members";
+roster.innerHTML = L.members.map((m,i)=>`
+  <li>
+    <span class="slot">${String(i+1).padStart(2,'0')}</span>
+    <img class="avatar" src="${m.avatar}" alt="">
+    <div class="who">
+      <p class="team ${m.team?'':'unset'}">${m.team ?? 'Team name not set'}</p>
+      <p class="handle">${m.name}</p>
+    </div>
+    ${m.owner?'<span class="tag">Commissioner</span>':'<span></span>'}
+  </li>`).join("");
+</script>
+</body></html>

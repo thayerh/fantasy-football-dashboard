@@ -1,0 +1,213 @@
+/* ===========================================================================
+   Athletics chrome — shared by the goheels-derived directions
+
+   Structural language lifted from goheels.com/sports/football:
+
+     • a two-tier masthead: Carolina Blue utility bar above a Navy section bar
+     • a white chevron plate holding the mark, its slanted edge pointing into
+       the navigation
+     • section labels in heavy condensed caps, preceded by an argyle cluster
+     • content in white, text in navy
+
+   Type: Oswald for display. UNC's own athletics headlines are a heavy
+   condensed grotesque; Oswald is the closest free equivalent and carries the
+   same stadium-signage voice. Open Sans stays for body — it is the actual
+   brand text face.
+   ========================================================================= */
+
+/* --- Masthead ------------------------------------------------------------ */
+.masthead { position: relative; z-index: 2; }
+
+.masthead-utility {
+  background: var(--unc-carolina);
+  display: flex;
+  align-items: stretch;
+  /* Sized around the mark: 44px of helmet plus the plate's padding. */
+  min-height: 64px;
+}
+
+/* The chevron plate. The angled right edge is the signature: a plain
+   rectangle here loses the whole athletics reference. */
+.chevron-plate {
+  background: var(--unc-white);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  /* The extra right padding is clearance for the angled edge — the clip cuts
+     22px in from the right, and the mark must not sit under the slope. */
+  padding: var(--space-2) var(--space-7) var(--space-2) var(--space-5);
+  clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 50%, calc(100% - 22px) 100%, 0 100%);
+  flex: none;
+}
+/* The league mark. An image rather than initials — sized by height so the
+   plate's own padding sets the bar height, and the aspect ratio is fixed so
+   nothing reflows while it loads. */
+.chevron-plate .plate-logo {
+  height: 44px;
+  width: auto;
+  display: block;
+  flex: none;
+}
+
+.masthead-utility nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  padding: 0 var(--space-5);
+  flex-wrap: wrap;
+}
+/* Not every nav item is a destination yet. Unbuilt sections render as <span>
+   so nothing pretends to be clickable — but they still have to look like the
+   nav they sit in. On the blue bar navy is the only legible option, so an
+   inactive item is distinguished by weight and cursor rather than colour. */
+.masthead-utility nav a,
+.masthead-utility nav span {
+  font-family: "Oswald", sans-serif;
+  font-weight: 500;
+  font-size: var(--step--1);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  /* Navy on Carolina Blue = 4.84:1. White would be 2.99 and fail body text,
+     which is why the utility bar reads navy-on-blue, not white-on-blue. */
+  color: var(--unc-navy);
+  text-decoration: none;
+  padding: var(--space-2) 0;
+  border-bottom: 2px solid transparent;
+  transition: border-color var(--dur) var(--ease);
+}
+.masthead-utility nav a:hover { border-bottom-color: var(--unc-navy); }
+.masthead-utility nav span { font-weight: 400; cursor: default; }
+
+.masthead-section {
+  background: var(--unc-navy);
+  display: flex;
+  align-items: center;
+  gap: var(--space-6);
+  padding: 0 var(--space-5);
+  flex-wrap: wrap;
+  min-height: 60px;
+}
+.masthead-section .wordmark {
+  font-family: "Oswald", sans-serif;
+  font-weight: 700;
+  font-size: var(--step-3);
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--unc-carolina);   /* 4.84:1 on navy — passes */
+  line-height: 1;
+}
+.masthead-section nav { display: flex; gap: var(--space-5); flex-wrap: wrap; }
+.masthead-section nav a,
+.masthead-section nav span {
+  font-family: "Open Sans", sans-serif;
+  font-weight: 600;
+  font-size: var(--step-0);
+  color: var(--unc-white);
+  text-decoration: none;
+  padding: var(--space-2) 0;
+  border-bottom: 2px solid transparent;
+  transition: border-color var(--dur) var(--ease);
+}
+/* On navy there is room to step an inactive item back: Fordham reads clearly
+   as secondary and still passes comfortably. */
+.masthead-section nav span { color: var(--unc-fordham); font-weight: 400; cursor: default; }
+.masthead-section nav a:hover { border-bottom-color: var(--unc-carolina); }
+.masthead-section nav a[aria-current] { border-bottom-color: var(--unc-carolina); }
+
+/* --- Section heading ----------------------------------------------------- */
+.sec-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+}
+.sec-head h2 {
+  font-family: "Oswald", sans-serif;
+  font-weight: 700;
+  font-size: var(--step-2);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--unc-navy);
+  margin: 0;
+  line-height: 1;
+}
+.sec-head .spacer { flex: 1; }
+.sec-head .meta {
+  font-size: var(--step--1);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.sec-head--onNavy h2 { color: var(--unc-white); }
+.sec-head--onNavy .meta { color: var(--unc-fordham); }
+
+/* --- Buttons ------------------------------------------------------------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: "Oswald", sans-serif;
+  font-weight: 600;
+  font-size: var(--step-0);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--unc-navy);
+  background: var(--unc-fordham);
+  border: 0;
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background var(--dur) var(--ease);
+}
+.btn:hover { background: var(--unc-carolina); }
+
+/* --- Status pill --------------------------------------------------------- */
+.freshness {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--step--1);
+  font-weight: 600;
+  color: var(--unc-bolin-creek);
+  background: var(--unc-cloud);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  white-space: nowrap;
+}
+.freshness .dot {
+  width: 8px; height: 8px; border-radius: var(--radius-pill);
+  background: var(--status-ok); flex: none;
+}
+.freshness.is-stale { background: var(--unc-coastal-sand); color: var(--text-on-warn); }
+.freshness.is-stale .dot { background: var(--status-warn); }
+
+/* --- Small screens -------------------------------------------------------
+   The utility nav is secondary by definition; at narrow widths it wraps into
+   the chevron plate and looks broken. Hide it (a real build would put it
+   behind a menu button) and let the section nav scroll horizontally rather
+   than reflow onto three lines. */
+@media (max-width: 48rem) {
+  .masthead-utility nav { display: none; }
+  .masthead-utility { min-height: 48px; }
+  .chevron-plate { padding-right: var(--space-6); }
+  .chevron-plate .plate-logo { height: 34px; }
+
+  .masthead-section {
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-5);
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .masthead-section .wordmark { font-size: var(--step-2); }
+  .masthead-section nav {
+    gap: var(--space-4);
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    max-width: 100%;
+    /* Keep the underline indicator visible while scrolling. */
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+  .masthead-section nav::-webkit-scrollbar { display: none; }
+  .masthead-section nav a { white-space: nowrap; }
+}

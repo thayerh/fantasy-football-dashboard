@@ -1,0 +1,571 @@
+/* ===========================================================================
+   GAMEDAY — the fantasy dashboard's theme layer
+   ---------------------------------------------------------------------------
+   Direction 4 ("goheels chrome × Franklin Street"), promoted from a one-off
+   mockup into the rules every page follows. The written rulebook is
+   design/GAMEDAY.md; this file is its executable half.
+
+   Load order matters and is fixed:
+
+       tokens.css      palette, type scale, spacing, radius, elevation
+       argyle.css      the four argyle forms
+       athletics.css   masthead, section heads, buttons, freshness pill
+       gameday.css     THIS FILE — page shell and content components
+
+   The shape of every page:
+
+       <header class="masthead"> two-tier chrome, identical everywhere </header>
+       <div class="field argyle-veil">        Carolina Blue, textured
+         <div class="wrap">
+           <div class="field-head"> kicker / h1 / subline / freshness </div>
+           <section class="panel">  white card — ALL content lives in one </section>
+         </div>
+       </div>
+
+   The single structural idea: a flood of Carolina Blue carries the brand and
+   the page title; every readable thing sits on white inside a panel. That is
+   what lets the theme hit UNC's ~40%-blue balance without ever putting body
+   text on a colour that fails contrast.
+
+   Nothing here uses a literal colour. If a new component needs one that does
+   not exist, add it to tokens.css — that is the only place hex belongs.
+   ========================================================================= */
+
+/* --- Base ---------------------------------------------------------------- */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--unc-carolina);
+  font-family: "Open Sans", system-ui, sans-serif;
+  color: var(--text-strong);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* One measure for the whole site. Panels align down the page across routes
+   because every page uses this and nothing sets its own max-width. */
+.wrap {
+  max-width: 66rem;
+  margin: 0 auto;
+  padding: 0 var(--space-5);
+}
+
+/* --- The field -----------------------------------------------------------
+   The blue page body. Pair with .argyle-veil so it reads as textile; a flat
+   fill this large looks like an unfinished background colour. */
+.field {
+  padding: var(--space-7) 0 var(--space-8);
+}
+/* Interior pages carry less air above the fold than the landing page. */
+.field--tight { padding: var(--space-6) 0 var(--space-7); }
+
+/* --- Page header ---------------------------------------------------------
+   Three fixed parts in one fixed order: kicker (context), h1 (identity),
+   subline (facts). Every page fills all three. An h1 alone floats. */
+.field-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-6);
+  color: var(--unc-white);
+}
+.kicker {
+  font-family: "Oswald", sans-serif;
+  font-weight: 600;
+  font-size: var(--step--1);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin: 0 0 var(--space-2);
+  opacity: 0.95;
+}
+.field-head h1 {
+  font-family: "Oswald", sans-serif;
+  font-weight: 700;
+  font-size: var(--step-5);
+  line-height: 0.95;
+  letter-spacing: 0.005em;
+  text-transform: uppercase;
+  margin: 0;
+  /* Hard navy offset, no blur (see --shadow-display). Buys real separation
+     from the veil behind it. */
+  text-shadow: var(--shadow-display);
+}
+.subline {
+  margin: var(--space-3) 0 0;
+  font-size: var(--step-1);
+  opacity: 0.95;
+}
+/* Numbers inside the subline step up to display type; the words stay body. */
+.subline b {
+  font-family: "Oswald", sans-serif;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Panel ---------------------------------------------------------------
+   The only container. Content that is not inside a panel is not readable on
+   this theme, because the page behind it is Carolina Blue. */
+.panel {
+  position: relative;
+  background: var(--unc-white);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+.panel + .panel { margin-top: var(--space-5); }
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border-bottom: 1px solid var(--unc-franklin-fog);
+  flex-wrap: wrap;
+}
+/* .sec-head (athletics.css) supplies the h2; inside a panel head it stretches
+   so its .spacer can push the meta text to the right edge. */
+.panel-head .sec-head { margin: 0; flex: 1; min-width: 0; }
+
+.panel-body { padding: var(--space-5); }
+
+.panel-foot {
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  border-top: 1px solid var(--unc-franklin-fog);
+}
+
+.note { margin: 0; font-size: var(--step--1); color: var(--text-muted); }
+
+/* --- Card grid -----------------------------------------------------------
+   Hairline rules come from a 1px gap over a fog-coloured background rather
+   than per-card borders, so the grid has no doubled lines and no dangling
+   edge on the final row. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+  gap: 1px;
+  background: var(--unc-franklin-fog);
+}
+.card {
+  background: var(--unc-white);
+  padding: var(--space-5);
+  display: flex;
+  gap: var(--space-4);
+  align-items: flex-start;
+  transition: background var(--dur) var(--ease);
+}
+.card:hover { background: var(--unc-cloud); }
+.card .body { min-width: 0; flex: 1; }
+
+/* Double ring: a white gap then Carolina Blue, so the ring reads on both the
+   white card and the cloud hover state. */
+.avatar {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-pill);
+  object-fit: cover;
+  flex: none;
+  background: var(--unc-cloud);
+  box-shadow: 0 0 0 3px var(--unc-white), 0 0 0 5px var(--unc-carolina);
+}
+.avatar--sm { width: 32px; height: 32px; box-shadow: 0 0 0 2px var(--unc-white), 0 0 0 3px var(--unc-carolina); }
+
+/* The primary line of a card: the thing the user came to read. */
+.team {
+  font-family: "Oswald", sans-serif;
+  font-weight: 600;
+  font-size: var(--step-1);
+  line-height: 1.15;
+  letter-spacing: 0.01em;
+  margin: 0 0 2px;
+}
+/* Absent data is styled as absent — italic body face, muted — never faked
+   with a placeholder that looks like a real team name. Old Well Basin, not
+   Flat Gray: a placeholder is still text, and Flat Gray is 2.36:1 on white. */
+/* Listed twice so it outranks .cell-team .who .name, which is more specific
+   than a lone class. */
+.unset,
+.cell-team .who .name.unset {
+  font-family: "Open Sans", sans-serif;
+  font-weight: 400;
+  font-style: italic;
+  letter-spacing: 0;
+  color: var(--text-muted);
+}
+.team.unset { font-size: var(--step-0); }
+.handle { margin: 0; color: var(--text-muted); font-size: var(--step--1); }
+
+/* --- Tag -----------------------------------------------------------------
+   Small, rare, and always navy-on-light. Supporting colours are 5% of the
+   palette; a page with tags on every row has no tags. */
+.tag {
+  display: inline-block;
+  margin-top: var(--space-2);
+  font-family: "Oswald", sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--unc-navy);
+  background: var(--unc-ginkgo);
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+}
+.tag--info { background: var(--unc-fordham); }
+.tag--quiet { background: var(--unc-franklin-fog); color: var(--text-muted); }
+
+/* --- Data table ----------------------------------------------------------
+   Standings, matchups, transactions — anything columnar. Navy header row
+   picks up the masthead; the body is plain white so long tables stay calm. */
+.stat-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--step-0);
+}
+.stat-table thead th {
+  background: var(--unc-navy);
+  color: var(--unc-white);
+  font-family: "Oswald", sans-serif;
+  font-weight: 500;
+  font-size: var(--step--1);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: var(--space-3) var(--space-5);
+  white-space: nowrap;
+}
+.stat-table td {
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--unc-franklin-fog);
+  vertical-align: middle;
+}
+.stat-table tbody tr:first-child td { border-top: 0; }
+.stat-table tbody tr { transition: background var(--dur) var(--ease); }
+.stat-table tbody tr:hover { background: var(--unc-cloud); }
+/* Every numeric cell. Proportional figures visibly wobble column to column. */
+.stat-table .num,
+.stat-table th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.stat-table .rank {
+  font-family: "Oswald", sans-serif;
+  font-weight: 700;
+  font-size: var(--step-1);
+  color: var(--unc-bolin-creek);
+  font-variant-numeric: tabular-nums;
+  width: 1%;
+  white-space: nowrap;
+}
+/* Name + avatar in one cell without a nested table layout. */
+.cell-team { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.cell-team .who { min-width: 0; }
+.cell-team .who p { margin: 0; }
+.cell-team .who .name {
+  font-family: "Oswald", sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.cell-team .who .sub { font-size: var(--step--1); color: var(--text-muted); }
+
+/* Wide tables scroll inside their panel; the page itself never scrolls
+   sideways. */
+.table-scroll { overflow-x: auto; }
+
+/* --- Stat strip ----------------------------------------------------------
+   A short row of headline numbers under a panel head. Oswald for the figure,
+   caps body for the label — the same pairing as the field header, one step
+   down. */
+/* Flex rather than grid, and rules drawn on the items rather than shown
+   through a gap: an auto-fit grid leaves a hairline-coloured hole wherever the
+   last row is short (three stats on a narrow screen), which reads as a missing
+   tile. Flex items grow to fill their row instead. The negative margin drops
+   the first row's rule onto the panel-head border so it isn't doubled. */
+.stat-strip {
+  display: flex;
+  flex-wrap: wrap;
+  background: var(--unc-white);
+  margin-top: -1px;
+}
+.stat {
+  flex: 1 1 9rem;
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--unc-franklin-fog);
+  border-left: 1px solid var(--unc-franklin-fog);
+}
+.stat:first-child { border-left: 0; }
+.stat .figure {
+  display: block;
+  font-family: "Oswald", sans-serif;
+  font-weight: 700;
+  font-size: var(--step-3);
+  line-height: 1;
+  color: var(--unc-navy);
+  font-variant-numeric: tabular-nums;
+}
+.stat .label {
+  display: block;
+  margin-top: var(--space-2);
+  font-size: var(--step--1);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* --- Rules and dividers -------------------------------------------------- */
+.accent-rule {
+  height: 4px;
+  background: var(--unc-carolina);
+  border: 0;
+  margin: 0;
+}
+
+/* --- Interface states ----------------------------------------------------
+   Loading, empty, and error are part of the theme, not an afterthought bolted
+   on when QA finds them. Each is a panel-shaped block so the page does not
+   change size or layout when it resolves. */
+.state {
+  padding: var(--space-7) var(--space-5);
+  text-align: center;
+  color: var(--text-muted);
+}
+.state h3 {
+  font-family: "Oswald", sans-serif;
+  font-weight: 600;
+  font-size: var(--step-1);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-strong);
+  margin: 0 0 var(--space-2);
+}
+.state p { margin: 0 auto; max-width: 34rem; font-size: var(--step-0); }
+/* Clay is 3.57:1 on white — it clears the large-bold threshold at this size
+   (Oswald 600, 20px) and nowhere else. The error *body* stays muted navy. */
+.state--error h3 { color: var(--status-error); }
+
+/* Skeletons are solid cloud at a pulsing opacity. No shimmer sweep: that is a
+   gradient, and gradients are the theme's loudest tell. */
+.skeleton {
+  background: var(--unc-cloud);
+  border-radius: var(--radius-sm);
+  animation: gd-pulse 1.4s var(--ease) infinite;
+}
+.skeleton--line { height: 0.75rem; }
+/* Skeleton cards borrow the card's own rhythm, so a placeholder never needs
+   an inline width to look like the row it is standing in for. */
+.card .skeleton--line { width: 70%; }
+.card .skeleton--line + .skeleton--line { width: 45%; margin-top: var(--space-2); }
+.skeleton--avatar { width: 52px; height: 52px; border-radius: var(--radius-pill); flex: none; }
+@keyframes gd-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
+}
+
+/* --- Focus --------------------------------------------------------------
+   One visible focus ring for the whole theme. Navy works on white panels and
+   on the blue field alike; a white ring would vanish on the panels. */
+:where(a, button, [tabindex]):focus-visible {
+  outline: 2px solid var(--unc-navy);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* --- Small screens -------------------------------------------------------
+   The masthead's own responsive rules live in athletics.css. These handle the
+   field and its contents. */
+@media (max-width: 48rem) {
+  .field { padding: var(--space-6) 0 var(--space-7); }
+  .field-head h1 { font-size: var(--step-4); }
+  .subline { font-size: var(--step-0); }
+  .panel-head, .panel-body, .card { padding: var(--space-4); }
+  .stat-table thead th, .stat-table td { padding: var(--space-3) var(--space-4); }
+}
+@media (max-width: 34rem) {
+  /* The freshness pill drops to its own line rather than squeezing the title
+     into a two-character column. */
+  .field-head { flex-direction: column; align-items: flex-start; }
+  .field-head h1 { font-size: var(--step-3); }
+
+  /* Same idea one level down: the section label gets the full width and its
+     meta text drops beneath, instead of the heading wrapping mid-phrase. */
+  .panel-head .sec-head { flex-wrap: wrap; }
+  .panel-head .sec-head .spacer { display: none; }
+  .panel-head .sec-head .meta { flex-basis: 100%; }
+}
+
+/* ===========================================================================
+   RAIL LAYOUT
+   ---------------------------------------------------------------------------
+   Borrowed from Direction 6 ("Sideline"), which took it from the reference
+   site: a narrow left column of at-a-glance cards beside a wide primary
+   column. It is the layout that lets a page carry standings *and* the season's
+   context without becoming one long stack, and it is why a new section can
+   arrive as a rail card instead of another block down the middle.
+
+   The rail is secondary by definition, so on narrow screens it moves BELOW the
+   primary column rather than pushing it off the first screen.
+   ========================================================================= */
+.wrap--wide { max-width: 76rem; }
+
+.layout {
+  display: grid;
+  grid-template-columns: 15.5rem 1fr;
+  gap: var(--space-5);
+  align-items: start;
+}
+/* Grid children default to min-width:auto, which lets a wide table set the
+   column's width — the whole page then scrolls sideways and .table-scroll
+   never scrolls at all. This one line is what keeps that promise. */
+.layout > * { min-width: 0; }
+@media (max-width: 60rem) {
+  .layout { grid-template-columns: 1fr; gap: var(--space-6); }
+  .layout > main { order: 1; }
+  .rail { order: 2; position: static; }
+}
+
+.rail {
+  /* Sticky so the season's context stays put while a long table scrolls. */
+  position: sticky;
+  top: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.rail-card {
+  background: var(--unc-white);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+/* One navy card anchors the rail. It carries no argyle: the field veil is
+   already this page's loud form, and two would be wallpaper. */
+.rail-card--feature {
+  background: var(--surface-inverse);
+  color: var(--text-on-navy);
+  padding: var(--space-5);
+}
+.rail-kicker {
+  font-family: "Oswald", sans-serif;
+  font-weight: 600;
+  font-size: var(--step--1);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-accent-dark);   /* Carolina on navy — 4.84:1 */
+  margin: 0 0 var(--space-2);
+}
+.rail-title {
+  font-family: "Oswald", sans-serif;
+  font-weight: 700;
+  font-size: var(--step-3);
+  text-transform: uppercase;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  margin: 0 0 var(--space-3);
+}
+.rail-sub { margin: 0; font-size: var(--step--1); color: var(--unc-fordham); }
+
+.rail-head {
+  background: var(--unc-cloud);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  border-bottom: 1px solid var(--unc-franklin-fog);
+}
+.rail-head h3 {
+  font-family: "Oswald", sans-serif;
+  font-weight: 600;
+  font-size: var(--step-0);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--unc-navy);
+  margin: 0;
+}
+/* The section ornament, cut to rail width. */
+.rail-head .argyle-mark { width: 36px; }
+
+/* --- Rail navigation ----------------------------------------------------- */
+.rail-nav { display: flex; flex-direction: column; padding: var(--space-2) 0; }
+.rail-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--step-0);
+  font-weight: 600;
+  color: var(--text-link);
+  text-decoration: none;
+  /* The active marker is a left edge rather than a fill, so the rail reads as
+     a list of destinations and not a stack of buttons. */
+  border-left: 3px solid transparent;
+  transition: background var(--dur) var(--ease);
+}
+.rail-link:hover { background: var(--unc-cloud); }
+.rail-link[aria-current="page"] {
+  border-left-color: var(--unc-carolina);
+  background: var(--unc-cloud);
+  color: var(--text-strong);
+}
+/* Not built yet. Styled as unavailable rather than as a link that lies. */
+.rail-link.is-soon {
+  color: var(--text-muted);
+  font-weight: 400;
+  cursor: default;
+}
+.rail-link.is-soon:hover { background: transparent; }
+
+/* --- Rail key/value list ------------------------------------------------- */
+.rail-list { margin: 0; padding: var(--space-3) var(--space-4); display: grid; gap: var(--space-2); }
+.rail-list > div { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); }
+.rail-list dt { font-size: var(--step--1); color: var(--text-muted); }
+.rail-list dd {
+  margin: 0;
+  font-size: var(--step--1);
+  font-weight: 600;
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* A tag sitting inline in a row rather than beneath a line of text. */
+.tag--inline { margin-top: 0; }
+
+/* --- Homepage additions --------------------------------------------------
+   Components the first real page needed. They live here rather than in the
+   page, which is the rule that keeps the theme from forking one route at a
+   time. */
+
+/* A member with no uploaded image gets their initial. Sleeper's default
+   avatar ids are shared — in this league seven ids covered twelve people — so
+   falling back to the stock image makes several members look identical. */
+.avatar--initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--unc-cloud);
+  color: var(--unc-bolin-creek);
+  font-family: "Oswald", sans-serif;
+  font-weight: 600;
+  font-size: var(--step--1);
+  line-height: 1;
+}
+
+/* A figure the database does not have yet — distinct from a zero, which would
+   be a claim. */
+.pending { color: var(--text-muted); }
+
+.skeleton--avatar-sm { width: 32px; height: 32px; }
+.skeleton--title { height: var(--step-4); width: 16rem; max-width: 60vw; }
+.skeleton--sub { display: inline-block; height: var(--step-0); width: 11rem; vertical-align: middle; }
+.cell-team .who .skeleton--line { width: 9rem; }
+.cell-team .who .skeleton--line + .skeleton--line { width: 6rem; margin-top: var(--space-2); }

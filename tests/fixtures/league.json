@@ -1,0 +1,15 @@
+{
+  "total_rosters": 12,
+  "status": "pre_draft",
+  "sport": "nfl",
+  "settings": {"max_keepers": 1, "draft_rounds": 15},
+  "season_type": "regular",
+  "season": "2026",
+  "scoring_settings": {"pass_td": 4.0, "rec": 0.5},
+  "roster_positions": ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF"],
+  "previous_league_id": "111111111111111111",
+  "name": "The League of Extraordinary Gentlemen",
+  "league_id": "999999999999999999",
+  "draft_id": "888888888888888888",
+  "avatar": "efaefa889ae24046a53265a3c71b8b64"
+}

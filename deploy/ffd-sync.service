@@ -1,0 +1,15 @@
+[Unit]
+Description=Ingest Sleeper data into the dashboard database
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/devcode/fantasy/fantasy-football-dashboard
+ExecStart=/usr/bin/env uv run ffd sync
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+# `ffd sync` exits non-zero on failure, so a bad run shows up in
+# `systemctl --user status ffd-sync` rather than only in the app's own logs.
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=Snapshot the dashboard database
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/devcode/fantasy/fantasy-football-dashboard
+ExecStart=/usr/bin/env uv run ffd backup
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=default.target

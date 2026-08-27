@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Direction 3 — Franklin Street</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@400;600;700;800;900&family=Open+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tokens.css"><link rel="stylesheet" href="argyle.css">
+<style>
+/* ===========================================================================
+   DIRECTION 3 — "Franklin Street": bright, social, fun
+
+   Reference points: a modern sports app, a team store, gameday graphics.
+   Warm and playful — but the discipline is in the restraint: one accent
+   family, a strict type scale, and radii that vary by ROLE (pill for status,
+   4px for panels) rather than being uniformly rounded everywhere.
+
+   Carolina Blue is the page field, which satisfies the brand's ~40% mandate.
+   That works precisely because a background carries no text-contrast burden;
+   all reading happens on white panels in navy. Trying to hit 40% blue with
+   blue *text* on white is what produces an inaccessible Carolina UI.
+   ========================================================================= */
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--unc-carolina);color:var(--text-strong);
+  font-family:"Open Sans",system-ui,sans-serif;line-height:1.5;
+}
+.hero{position:relative;overflow:hidden;color:var(--unc-white)}
+/* Argyle watermark keeps the blue field from reading as a flat colour block. */
+.hero::before{
+  content:"";position:absolute;inset:0;opacity:.22;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='160' viewBox='0 0 120 160'%3E%3Cpath d='M60 0 L120 80 L60 160 L0 80 Z' fill='none' stroke='%23ffffff' stroke-width='1.5'/%3E%3Cg stroke='%23ffffff' stroke-width='1' stroke-dasharray='5 7'%3E%3Cpath d='M0 0 L120 160'/%3E%3Cpath d='M120 0 L0 160'/%3E%3C/g%3E%3C/svg%3E");
+  background-size:120px 160px;
+}
+.wrap{max-width:62rem;margin:0 auto;padding:0 var(--space-5);position:relative}
+.hero .wrap{padding-top:var(--space-7);padding-bottom:var(--space-7)}
+.eyebrow{
+  font-family:"Libre Franklin",sans-serif;font-weight:700;font-size:var(--step--1);
+  letter-spacing:.16em;text-transform:uppercase;margin:0 0 var(--space-2);
+  color:var(--unc-white);opacity:.9;
+}
+h1{
+  font-family:"Libre Franklin",sans-serif;font-weight:900;
+  font-size:var(--step-5);line-height:1;letter-spacing:-.03em;margin:0 0 var(--space-3);
+  text-shadow:0 1px 0 rgba(19,41,75,.18);
+}
+.hero-meta{display:flex;gap:var(--space-5);flex-wrap:wrap;font-size:var(--step-0);opacity:.95;margin:0}
+.hero-meta b{font-family:"Libre Franklin",sans-serif;font-weight:700}
+
+/* Panels lift off the blue field. One elevation level only. */
+main{padding-bottom:var(--space-8)}
+.panel{
+  background:var(--surface-raised);border-radius:var(--radius-md);
+  box-shadow:var(--shadow-md);margin-top:calc(var(--space-6) * -1);
+  position:relative;overflow:hidden;
+}
+.panel-head{
+  display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);
+  padding:var(--space-5);border-bottom:1px solid var(--unc-franklin-fog);flex-wrap:wrap;
+}
+.panel-head h2{
+  font-family:"Libre Franklin",sans-serif;font-weight:800;font-size:var(--step-2);
+  margin:0;letter-spacing:-.015em;
+}
+.pill{
+  display:inline-flex;align-items:center;gap:var(--space-2);
+  background:var(--unc-cloud);color:var(--unc-bolin-creek);
+  border-radius:var(--radius-pill);padding:var(--space-2) var(--space-4);
+  font-size:var(--step--1);font-weight:600;
+}
+.pill .dot{width:8px;height:8px;border-radius:var(--radius-pill);background:var(--status-ok)}
+.pill.is-stale{background:var(--unc-coastal-sand);color:#7A4A00}
+.pill.is-stale .dot{background:var(--status-warn)}
+
+/* Cards: a roster grid reads more social than a table for a 12-person league. */
+.grid{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(15rem,1fr));
+  gap:1px;background:var(--unc-franklin-fog);
+}
+.card{
+  background:var(--surface-raised);padding:var(--space-5);
+  display:flex;gap:var(--space-4);align-items:flex-start;
+  transition:background var(--dur) var(--ease);
+}
+.card:hover{background:var(--unc-cloud)}
+.avatar{
+  width:52px;height:52px;border-radius:var(--radius-pill);object-fit:cover;
+  background:var(--unc-cloud);flex:none;
+  box-shadow:0 0 0 3px var(--unc-white),0 0 0 5px var(--unc-carolina);
+}
+.card-body{min-width:0;flex:1}
+.team{
+  font-family:"Libre Franklin",sans-serif;font-weight:800;font-size:var(--step-1);
+  letter-spacing:-.015em;margin:0 0 2px;line-height:1.15;
+}
+.team.unset{color:var(--unc-flat-gray);font-weight:400;font-style:italic;font-size:var(--step-0)}
+.handle{margin:0;color:var(--text-muted);font-size:var(--step--1)}
+.tag{
+  display:inline-block;margin-top:var(--space-2);
+  font-family:"Libre Franklin",sans-serif;font-size:10px;font-weight:800;
+  letter-spacing:.1em;text-transform:uppercase;
+  color:var(--unc-navy);background:var(--unc-ginkgo);
+  padding:3px 7px;border-radius:var(--radius-sm);
+}
+footer{
+  padding:var(--space-5);text-align:center;color:var(--unc-white);
+  font-size:var(--step--1);opacity:.9;position:relative;
+}
+</style></head>
+<body>
+<div class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Sleeper Fantasy Football</p>
+    <h1 id="league"></h1>
+    <p class="hero-meta">
+      <span><b id="season"></b> season</span>
+      <span><b id="teams"></b> teams</span>
+      <span>Draft <b>pending</b></span>
+    </p>
+  </div>
+</div>
+
+<main class="wrap">
+  <section class="panel">
+    <div class="panel-head">
+      <h2>The League</h2>
+      <span class="pill"><span class="dot"></span>Updated 4 minutes ago</span>
+    </div>
+    <div class="grid" id="grid"></div>
+  </section>
+</main>
+<footer>Synced from Sleeper every 5 minutes</footer>
+
+<script src="sample.js"></script>
+<script>
+const L = window.LEAGUE;
+league.textContent = L.league; season.textContent = L.season; teams.textContent = L.teams;
+grid.innerHTML = L.members.map(m=>`
+  <article class="card">
+    <img class="avatar" src="${m.avatar}" alt="">
+    <div class="card-body">
+      <p class="team ${m.team?'':'unset'}">${m.team ?? 'Team name not set'}</p>
+      <p class="handle">${m.name}</p>
+      ${m.owner?'<span class="tag">Commissioner</span>':''}
+    </div>
+  </article>`).join("");
+</script>
+</body></html>

@@ -1,0 +1,36 @@
+[
+  {
+    "user_id": "1001",
+    "display_name": "Commish",
+    "avatar": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "is_bot": false,
+    "settings": null,
+    "league_id": "999999999999999999",
+    "metadata": {
+      "team_name": "Gridiron Gurus",
+      "avatar": "https://sleepercdn.com/uploads/custom-commish.jpg",
+      "allow_pn": "on"
+    },
+    "is_owner": true
+  },
+  {
+    "user_id": "1002",
+    "display_name": "Ben",
+    "avatar": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "is_bot": false,
+    "settings": null,
+    "league_id": "999999999999999999",
+    "metadata": {"team_name": "Ben's Bombers"},
+    "is_owner": false
+  },
+  {
+    "user_id": "1003",
+    "display_name": "Alex",
+    "avatar": null,
+    "is_bot": false,
+    "settings": null,
+    "league_id": "999999999999999999",
+    "metadata": {},
+    "is_owner": false
+  }
+]
