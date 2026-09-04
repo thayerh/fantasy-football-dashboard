@@ -1,0 +1,20 @@
+[
+  {
+    "draft_id": "222000000000000002",
+    "created": 1785000000000,
+    "league_id": "999999999999999999",
+    "season": "2026",
+    "status": "pre_draft",
+    "type": "snake",
+    "settings": {"rounds": 3, "teams": 4}
+  },
+  {
+    "draft_id": "111000000000000001",
+    "created": 1750000000000,
+    "league_id": "999999999999999999",
+    "season": "2025",
+    "status": "complete",
+    "type": "snake",
+    "settings": {"rounds": 3, "teams": 4}
+  }
+]

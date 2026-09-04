@@ -1,0 +1,16 @@
+[Unit]
+Description=Ingest the Sleeper draft board
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/devcode/fantasy/fantasy-football-dashboard
+ExecStart=/usr/bin/env uv run ffd sync-draft
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+# Writes no sync_run row — at 20s that would bury the record of the real sync.
+# The draft's own fetched_at is what the page shows. A failure still exits
+# non-zero, so `systemctl --user status ffd-draft` reports it.
+
+[Install]
+WantedBy=default.target

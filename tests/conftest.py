@@ -33,6 +33,21 @@ def users_payload():
 
 
 @pytest.fixture
+def drafts_payload():
+    return load_fixture("drafts.json")
+
+
+@pytest.fixture
+def draft_payload():
+    return load_fixture("draft.json")
+
+
+@pytest.fixture
+def draft_picks_payload():
+    return load_fixture("draft_picks.json")
+
+
+@pytest.fixture
 def settings(tmp_path, monkeypatch):
     """Point the app at a throwaway database and league id."""
     monkeypatch.setenv("FFD_DB_PATH", str(tmp_path / "test.db"))

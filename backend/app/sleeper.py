@@ -93,3 +93,23 @@ class SleeperClient:
 
     def get_league_users(self, league_id: str) -> list[dict[str, Any]]:
         return self._get(f"/league/{league_id}/users")
+
+    def get_players(self, sport: str = "nfl") -> dict[str, Any]:
+        """The entire player pool — ~14 MB and ~12,000 players.
+
+        Sleeper's docs say to call this **once a day at most**, which is why it
+        has its own daily command and is not part of `ffd sync`.
+        """
+        return self._get(f"/players/{sport}")
+
+    def get_league_drafts(self, league_id: str) -> list[dict[str, Any]]:
+        """Every draft for the league, newest first."""
+        return self._get(f"/league/{league_id}/drafts")
+
+    def get_draft(self, draft_id: str) -> dict[str, Any]:
+        return self._get(f"/draft/{draft_id}")
+
+    def get_draft_picks(self, draft_id: str) -> list[dict[str, Any]]:
+        """Picks made so far. Empty until the draft starts — except keepers,
+        which Sleeper places on the board before it does."""
+        return self._get(f"/draft/{draft_id}/picks")

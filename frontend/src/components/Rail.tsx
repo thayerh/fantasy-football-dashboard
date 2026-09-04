@@ -1,5 +1,6 @@
-import type { Health, League } from "../api/client";
-import { humanStatus, relativeAge } from "../format";
+import type { Draft, Health, League } from "../api/client";
+import { humanStatus, localDateTime, relativeAge } from "../format";
+import { ROUTES, Link } from "../router";
 
 /**
  * The left rail — Direction 6's structure, kept because it is what lets new
@@ -16,35 +17,46 @@ const GROUPS: { title: string; items: string[] }[] = [
   { title: "Season", items: ["Matchups", "Transactions", "Waivers", "History"] },
 ];
 
-/** What the league is waiting on, derived from Sleeper's own status. */
-function upNext(league: League | undefined): { title: string; sub: string } {
+/** What the league is waiting on. The draft knows its own schedule, so prefer
+ *  it; the league's status is the fallback before a draft has been ingested. */
+function upNext(
+  league: League | undefined,
+  draft: Draft | undefined,
+): { title: string; sub: string } {
+  if (draft?.status === "drafting") return { title: "Draft", sub: "On the clock" };
+  if (draft && draft.status !== "complete") {
+    return {
+      title: "Draft",
+      sub: draft.start_time
+        ? localDateTime(draft.start_time)
+        : `Not yet scheduled · ${draft.teams ?? "—"} teams entered`,
+    };
+  }
+
   switch (league?.status) {
-    case "drafting":
-      return { title: "Draft", sub: "In progress" };
     case "in_season":
       return { title: "Season", sub: "Underway" };
     case "complete":
       return { title: "Offseason", sub: "Season complete" };
     default:
-      return {
-        title: "Draft",
-        sub: `Not yet scheduled · ${league?.total_rosters ?? "—"} teams entered`,
-      };
+      return { title: "Season", sub: "Draft complete" };
   }
 }
 
 export function Rail({
   league,
+  draft,
   health,
   memberCount,
   current,
 }: {
   league: League | undefined;
+  draft: Draft | undefined;
   health: Health | undefined;
   memberCount: number | undefined;
   current: string;
 }) {
-  const next = upNext(league);
+  const next = upNext(league, draft);
 
   return (
     <aside className="rail">
@@ -62,10 +74,15 @@ export function Rail({
           </div>
           <nav className="rail-nav" aria-label={group.title}>
             {group.items.map((item) =>
-              item === current ? (
-                <a className="rail-link" href="/" aria-current="page" key={item}>
+              ROUTES[item] ? (
+                <Link
+                  className="rail-link"
+                  href={ROUTES[item]}
+                  aria-current={item === current ? "page" : undefined}
+                  key={item}
+                >
                   {item}
-                </a>
+                </Link>
               ) : (
                 <span className="rail-link is-soon" key={item}>
                   {item}

@@ -1,0 +1,15 @@
+[Unit]
+Description=Refresh the Sleeper NFL player pool
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/devcode/fantasy/fantasy-football-dashboard
+ExecStart=/usr/bin/env uv run ffd sync-players
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+# ~14 MB response, ~12,000 players in, ~1,900 stored. Sleeper's docs ask for no
+# more than one call a day, which is why this is not part of `ffd sync`.
+
+[Install]
+WantedBy=default.target

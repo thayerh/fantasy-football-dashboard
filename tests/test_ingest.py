@@ -11,7 +11,7 @@ from typer.testing import CliRunner
 from app.cli import app as cli_app
 from app.db import session_scope
 from app.ingest import sync_league, sync_users
-from app.models import League, LeagueUser, SyncRun
+from app.models import Draft, League, LeagueUser, SyncRun
 from app.sleeper import SleeperClient
 
 BASE = "https://api.sleeper.app/v1"
@@ -23,13 +23,25 @@ def no_sleep(monkeypatch):
     monkeypatch.setattr("app.sleeper.time.sleep", lambda _: None)
 
 
-def _mock_sleeper(league_payload, users_payload):
+def _mock_sleeper(league_payload, users_payload, drafts=None, draft=None, picks=None):
     respx.get(f"{BASE}/league/{LEAGUE_ID}").mock(
         return_value=httpx.Response(200, json=league_payload)
     )
     respx.get(f"{BASE}/league/{LEAGUE_ID}/users").mock(
         return_value=httpx.Response(200, json=users_payload)
     )
+    # `ffd sync` also syncs the draft, so the board stays current with the fast
+    # ffd-draft.timer disabled. Draft-specific behaviour is in test_draft.py.
+    respx.get(f"{BASE}/league/{LEAGUE_ID}/drafts").mock(
+        return_value=httpx.Response(200, json=drafts if drafts is not None else [])
+    )
+    if draft is not None:
+        respx.get(f"{BASE}/draft/{draft['draft_id']}").mock(
+            return_value=httpx.Response(200, json=draft)
+        )
+        respx.get(f"{BASE}/draft/{draft['draft_id']}/picks").mock(
+            return_value=httpx.Response(200, json=picks or [])
+        )
 
 
 @respx.mock
@@ -145,17 +157,24 @@ def test_departed_member_is_retained(session, settings, league_payload, users_pa
 
 
 @respx.mock
-def test_cli_sync_records_ok_run(db, settings, league_payload, users_payload):
-    _mock_sleeper(league_payload, users_payload)
+def test_cli_sync_records_ok_run(
+    db, settings, league_payload, users_payload, drafts_payload, draft_payload, draft_picks_payload
+):
+    _mock_sleeper(
+        league_payload, users_payload, drafts_payload, draft_payload, draft_picks_payload
+    )
     result = CliRunner().invoke(cli_app, ["sync"])
     assert result.exit_code == 0, result.output
 
     with session_scope() as s:
         run = s.scalars(select(SyncRun).order_by(SyncRun.id.desc())).first()
         assert run.status == "ok"
-        assert run.records_written == 4  # 1 league + 3 users
+        # 1 league + 3 users + 1 draft + 2 picks
+        assert run.records_written == 7
         assert run.finished_at is not None
         assert run.error is None
+        # The draft rides along with the five-minute sync, not only the fast one.
+        assert s.scalar(select(func.count()).select_from(Draft)) == 1
 
 
 @respx.mock

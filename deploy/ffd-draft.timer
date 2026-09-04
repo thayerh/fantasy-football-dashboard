@@ -1,0 +1,23 @@
+[Unit]
+Description=Poll the Sleeper draft board every 20 seconds
+# Only worth running on draft day. Enable it before the draft and stop it
+# afterwards; ffd-sync (every 5 minutes) also syncs the draft, so the board
+# stays current — just not live — with this timer off.
+#
+#   systemctl --user start  ffd-draft.timer     # draft day
+#   systemctl --user stop   ffd-draft.timer     # afterwards
+#
+# A oneshot service cannot overlap itself, so a slow Sleeper response delays
+# the next run rather than stacking two writers on the database.
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=20s
+# Deliberately NOT Persistent: catching up missed 20-second runs is pointless,
+# the next poll is always seconds away.
+Persistent=false
+AccuracySec=1s
+Unit=ffd-draft.service
+
+[Install]
+WantedBy=timers.target

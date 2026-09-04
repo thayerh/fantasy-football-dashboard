@@ -7,12 +7,11 @@ Create Date: ${create_date}
 """
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 
 import app.db  # noqa: F401  (custom column types used by some migrations)
 ${imports if imports else ""}
-
 # revision identifiers, used by Alembic.
 revision: str = ${repr(up_revision)}
 down_revision: str | Sequence[str] | None = ${repr(down_revision)}

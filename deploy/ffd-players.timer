@@ -1,0 +1,16 @@
+[Unit]
+Description=Refresh the NFL player pool daily
+# "Best available" is only as good as this table. Rosters, injuries and
+# Sleeper's own rankings all move during the season.
+
+[Timer]
+OnCalendar=daily
+# Spread the load off the hour — everyone's cron fires at midnight.
+RandomizedDelaySec=45min
+# Catch up after the desktop has been off; a day-old pool is worth refreshing
+# immediately rather than waiting for tomorrow.
+Persistent=true
+Unit=ffd-players.service
+
+[Install]
+WantedBy=timers.target

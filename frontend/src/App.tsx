@@ -1,115 +1,25 @@
-import { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
-
-import { ApiError, api } from "./api/client";
-import { Freshness } from "./components/Freshness";
 import { Masthead } from "./components/Masthead";
-import { Rail } from "./components/Rail";
-import { StandingsPanel } from "./components/StandingsPanel";
-import { humanStatus } from "./format";
+import { DRAFT, DraftPage } from "./pages/DraftPage";
+import { STANDINGS, StandingsPage } from "./pages/StandingsPage";
+import { usePath } from "./router";
 
 /**
- * How often the browser re-asks the API.
- *
- * Deliberately independent of the ingest cadence (ffd-sync.timer, every 5m):
- * this is a UI responsiveness knob, and reading from local SQLite is cheap.
- * The two are tuned separately and need not match.
+ * The shell every page shares: the athletics masthead, then the blue field.
+ * Pages own their own header and their own arrangement below it — see
+ * design/GAMEDAY.md for the structure they follow.
  */
-const REFRESH_MS = 60_000;
-
-/** The page this build serves. Rail and masthead mark it aria-current. */
-const CURRENT = "Standings";
-
 export default function App() {
-  const health = useQuery({
-    queryKey: ["health"],
-    queryFn: api.health,
-    refetchInterval: REFRESH_MS,
-  });
-
-  const league = useQuery({
-    queryKey: ["league"],
-    queryFn: api.league,
-    refetchInterval: REFRESH_MS,
-    // 503 means "not ingested yet" — retrying in a tight loop won't help.
-    retry: (count, error) => !(error instanceof ApiError && error.status === 503) && count < 2,
-  });
-
-  const users = useQuery({
-    queryKey: ["users"],
-    queryFn: api.users,
-    refetchInterval: REFRESH_MS,
-  });
-
-  const name = league.data?.name ?? null;
-  useEffect(() => {
-    document.title = name ? `${name} — Standings` : "League Dashboard";
-  }, [name]);
-
-  // The one error worth its own treatment: the database is fine, it is simply
-  // empty. Telling someone to run `ffd sync` is more useful than a red box.
-  const notIngested =
-    league.isError && league.error instanceof ApiError && league.error.status === 503;
+  const path = usePath();
+  const onDraft = path.startsWith("/draft");
 
   return (
     <>
-      <Masthead current={CURRENT} />
-
+      <Masthead current={onDraft ? DRAFT : STANDINGS} />
       <div className="field argyle-veil">
-        <div className="wrap wrap--wide">
-          <div className="field-head">
-            <div>
-              <p className="kicker">
-                Sleeper{league.data?.season ? ` · ${league.data.season} Season` : ""}
-              </p>
-              {league.isPending ? (
-                <h1>
-                  <span className="skeleton skeleton--title" />
-                </h1>
-              ) : (
-                <h1>{name ?? "League Dashboard"}</h1>
-              )}
-              <p className="subline">
-                {league.isPending ? (
-                  <span className="skeleton skeleton--sub" />
-                ) : league.data ? (
-                  <>
-                    <b>{league.data.total_rosters ?? "—"}</b> teams ·{" "}
-                    <b>{humanStatus(league.data.status)}</b>
-                  </>
-                ) : (
-                  "League details unavailable"
-                )}
-              </p>
-            </div>
-            <Freshness health={health.data} />
-          </div>
-
-          {notIngested && (
-            <section className="panel">
-              <div className="state">
-                <h3>Nothing ingested yet</h3>
-                <p>{(league.error as ApiError).detail}</p>
-              </div>
-            </section>
-          )}
-
-          <div className="layout">
-            <Rail
-              league={league.data}
-              health={health.data}
-              memberCount={users.data?.length}
-              current={CURRENT}
-            />
-            <main>
-              <StandingsPanel
-                league={league.data}
-                users={users.data}
-                isPending={users.isPending}
-                error={users.isError ? (users.error as Error) : null}
-              />
-            </main>
-          </div>
+        {/* The board wants every pixel it can get; the standings page keeps the
+            narrower measure it shares with the design mockups. */}
+        <div className={onDraft ? "wrap wrap--board" : "wrap wrap--wide"}>
+          {onDraft ? <DraftPage /> : <StandingsPage />}
         </div>
       </div>
     </>

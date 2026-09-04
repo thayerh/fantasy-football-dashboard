@@ -8,12 +8,13 @@ structural rather than a convention to remember.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import health, league
+from app.api import draft, health, league
 from app.config import get_settings
 
 log = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ app = FastAPI(
 
 app.include_router(health.router)
 app.include_router(league.router)
+app.include_router(draft.router)
 
 
 @app.middleware("http")
@@ -41,6 +43,29 @@ async def log_access_identity(request: Request, call_next):
     if email and request.url.path.startswith("/api/"):
         log.debug("%s %s by %s", request.method, request.url.path, email)
     return response
+
+
+def resolve_static_file(root: Path, full_path: str) -> Path | None:
+    """The file to serve for a SPA request, or None to fall back to index.html.
+
+    `full_path` is attacker-controlled and reaches the route percent-decoded, so
+    "/%2e%2e/%2e%2e/.env" arrives here as "../../.env". Joining that to the
+    build directory escapes it and serves any file the process can read — .env
+    among them. Resolve first, then require the result to still be inside the
+    build before touching the filesystem.
+
+    Split out from the route so it can be tested directly: an HTTP client
+    normalises "../" out of the URL before it is ever sent, which makes a
+    request-level test of this look like it passes when it does not.
+    """
+    if not full_path:
+        return None
+
+    candidate = (root / full_path).resolve()
+    if not candidate.is_relative_to(root):
+        log.warning("Refusing to serve %r: outside the static root", full_path)
+        return None
+    return candidate if candidate.is_file() else None
 
 
 def _mount_spa() -> None:
@@ -59,14 +84,14 @@ def _mount_spa() -> None:
     if assets.is_dir():
         app.mount("/assets", StaticFiles(directory=assets), name="assets")
 
+    root = static_dir.resolve()
+
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa(full_path: str) -> FileResponse:
         # Single-page app: unknown paths return index.html so client-side
         # routing works on a hard refresh. /api/* is already matched above.
-        candidate = static_dir / full_path
-        if full_path and candidate.is_file():
-            return FileResponse(candidate)
-        return FileResponse(index)
+        candidate = resolve_static_file(root, full_path)
+        return FileResponse(candidate or index)
 
 
 _mount_spa()

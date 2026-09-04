@@ -1,0 +1,66 @@
+To restart it yourself:
+
+  cd ~/devcode/fantasy/fantasy-football-dashboard
+  uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+  That serves the built frontend from frontend/dist, so after any frontend change run npm --prefix frontend run build first.
+
+  For live reload while editing the frontend, run npm --prefix frontend run dev in a second terminal and use the Vite URL it prints (:5173) — it proxies /api to :8000.
+
+--------------------------------------------------------------------------
+
+To rebuild it from scratch (after a fresh clone, or when things look wrong):
+
+  cd ~/devcode/fantasy/fantasy-football-dashboard
+
+  1. Backend dependencies (uv reads .python-version and fetches 3.12 itself):
+
+       uv sync
+
+  2. Database schema — safe to re-run, it is a no-op when already current:
+
+       uv run alembic upgrade head
+
+  3. Frontend build. `ci` installs exactly what package-lock.json pins, so use
+     it rather than `install` unless you are deliberately changing a version:
+
+       npm --prefix frontend ci
+       npm --prefix frontend run build
+
+     This writes frontend/dist, which is what uvicorn serves. The build runs
+     tsc first, so a type error fails the build instead of shipping.
+
+  4. Start it:
+
+       uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
+
+A rebuilt database is empty — the page will render with no data until you
+pull some in. Each of these is independent and re-runnable:
+
+    uv run ffd sync            # league + members, from Sleeper
+    uv run ffd sync-draft      # draft board and picks
+    uv run ffd sync-players    # the NFL player pool (~5MB; once a day at most)
+    uv run ffd sync-rankings   # FantasyPros consensus (--source web, default)
+    uv run ffd sync-adp        # Sleeper ADP (--source web, default)
+
+sync-adp renders a real page in a headless browser, so it needs Google Chrome
+installed (it falls back to `uv run playwright install chromium`). The other
+four are plain HTTP.
+
+    uv run ffd status          # what has been synced, and when
+
+Before trusting a rebuild:
+
+    uv run pytest              # the suite runs offline, no API calls
+    uv run ruff check .
+    npm --prefix frontend run lint
+
+If the frontend build is the thing that is broken, delete the caches and
+redo step 3 — this is the only step worth wiping, the rest are incremental:
+
+    rm -rf frontend/node_modules frontend/dist
+
+Rebuilding never touches data/ffd.db. To roll the database back instead, use
+a backup rather than rebuilding: `uv run ffd restore <backup>`; the copies
+live in data/backups/ and deploy/README.md has the manual path for when the
+CLI itself is what is broken.

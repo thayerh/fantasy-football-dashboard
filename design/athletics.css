@@ -178,6 +178,9 @@
   width: 8px; height: 8px; border-radius: var(--radius-pill);
   background: var(--status-ok); flex: none;
 }
+/* Fresh, but nothing is happening — a board that is up to date before the
+   draft starts. The green dot would imply live. */
+.freshness.is-quiet .dot { background: var(--border-subtle); }
 .freshness.is-stale { background: var(--unc-coastal-sand); color: var(--text-on-warn); }
 .freshness.is-stale .dot { background: var(--status-warn); }
 

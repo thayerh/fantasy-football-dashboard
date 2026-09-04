@@ -8,18 +8,23 @@ If you move it, update `WorkingDirectory=` in the `.service` files.
 ## Architecture
 
 ```
-ffd-sync.timer ──▶ ffd-sync.service (oneshot: `ffd sync`) ──┐
-                                                            ├─▶ data/ffd.db (WAL)
-ffd-api.service (uvicorn, long-running) ─── reads only ─────┘
+ffd-sync.timer  ──▶ ffd-sync.service  (oneshot: `ffd sync`)       ──┐
+ffd-draft.timer ──▶ ffd-draft.service (oneshot: `ffd sync-draft`) ──┤
+                                                                    ├─▶ data/ffd.db (WAL)
+ffd-api.service (uvicorn, long-running) ─── reads only ─────────────┘
                                                     ▲
-ffd-backup.timer ──▶ ffd-backup.service             │
+ffd-backup.timer  ──▶ ffd-backup.service            │
+ffd-players.timer ──▶ ffd-players.service          │
+ffd-rankings.timer ─▶ ffd-rankings.service         │
                                                     │
 cloudflared (ffd-tunnel.service) ──▶ 127.0.0.1:8000 ┘
 ```
 
-The sync process is the **only** writer. The API never writes, and a oneshot
-service cannot overlap itself, so concurrent writes are impossible by
-construction rather than by convention.
+The sync processes are the **only** writers, and the API never writes. A
+oneshot service cannot overlap itself, so neither timer can stack two runs of
+its own job. The two write disjoint tables — `ffd sync` the league and members,
+`ffd sync-draft` the draft and its picks — and SQLite's WAL plus a 5s
+`busy_timeout` covers the moment they overlap each other.
 
 ## 1. First-time setup
 
@@ -95,7 +100,11 @@ mkdir -p ~/.config/systemd/user
 cp deploy/ffd-*.service deploy/ffd-*.timer ~/.config/systemd/user/
 systemctl --user daemon-reload
 
-systemctl --user enable --now ffd-api ffd-tunnel ffd-sync.timer ffd-backup.timer
+systemctl --user enable --now ffd-api ffd-tunnel ffd-sync.timer ffd-backup.timer \
+                             ffd-players.timer ffd-rankings.timer
+
+# The draft board's fast poll. Deliberately NOT enabled by default — see below.
+# systemctl --user start ffd-draft.timer
 
 # Keep services running after logout and across reboots.
 loginctl enable-linger "$USER"
@@ -109,6 +118,134 @@ systemctl --user list-timers 'ffd-*'
 curl -s localhost:8000/api/health | jq
 journalctl --user -u ffd-sync -f
 ```
+
+## The player pool
+
+`ffd sync-players` fetches Sleeper's whole player list — ~14 MB, ~12,000
+players — and stores the ~1,900 that are draftable. It backs the draft page's
+"best available" list, and it is the one endpoint Sleeper asks you to call no
+more than once a day, so it has its own daily timer and is deliberately absent
+from `ffd sync`.
+
+Run it once before the draft if the timer has never fired:
+
+```bash
+uv run ffd sync-players
+```
+
+## FantasyPros rankings
+
+`ffd sync-rankings` fills the "best available" ordering with FantasyPros
+consensus (ECR). Run `ffd sync-players` first — rankings are stored against
+Sleeper player ids — and the table is replaced outright each time, so the
+newest fetch is the truth.
+
+**Two sources, and the default is the scrape.**
+
+| | `--source web` (default) | `--source api` |
+|---|---|---|
+| what | the public PPR cheat sheet | the JSON API |
+| players | **~515**, the complete set | ~60 |
+| extras | expert spread (min/max/ave/std) | — |
+| cost | 1 HTTP request | 7 of 50 daily API calls |
+| risk | breaks if the page changes | supported interface |
+
+The cheat-sheet page renders its table from an embedded JSON blob with the same
+shape the API returns, so the scraper reads the blob rather than the markup —
+no dependence on class names or how many rows the page chose to draw. It fails
+loudly if the blob is missing, because a silent empty result would look like
+"nothing is ranked today".
+
+The API path stays as the fallback. Its free tier caps every response at ten
+players and ignores a `limit` parameter, so it needs one call per position and
+still returns a fraction of the board.
+
+```bash
+uv run ffd sync-rankings                  # scrape, 1 request
+uv run ffd sync-rankings --source api     # fallback, 7 API calls
+```
+
+Two things to know about the matching, since the two databases disagree:
+
+* Names are reconciled by a ladder — name+position, then name alone
+  (FantasyPros files fullbacks as RB), then last name+team (nicknames:
+  "Hollywood Brown" is Sleeper's "Marquise Brown"), then team abbreviation for
+  defenses (FantasyPros says JAC, Sleeper says JAX). Ambiguity always loses: a
+  rung finding two candidates falls through rather than guessing.
+* Misses are logged, not hidden. Today that is one free agent out of 517, plus
+  one collision where two ranked players share a name and Sleeper lists one.
+
+Scraping is a weaker footing than the API: FantasyPros' terms may not permit
+it, and the page's shape is not a contract. That is why the request is made
+once a day with a real User-Agent, and why the API path is kept working.
+
+## ADP
+
+`ffd sync-adp` stores average draft position, which the draft board uses to
+show what each pick cost against the market. It runs from the same daily unit
+as the rankings.
+
+**It is Sleeper's own ADP** — the market this league actually drafts in — and it
+comes from rendering FantasyPros' real-time ADP page in a headless browser:
+
+```
+uv run ffd sync-adp                # --source web, the default: ~270 players
+uv run ffd sync-adp --source api   # fallback: 7 API calls, ~60 players
+```
+
+The two sources are **different numbers, not different sample sizes of the same
+one**: `web` is Sleeper alone, `api` is FantasyPros' average across five
+platforms. `player_adp.source` records which is in the table, and each sync
+replaces the table outright so it never holds a mix.
+
+*Why a browser is needed.* The cheat sheet embeds its rankings as JSON in the
+HTML, so `httpx` is enough for `sync-rankings`. The ADP page does not — it ships
+an empty table and fills it in from JavaScript, so fetching the HTML returns
+nothing. Rendering it is the only way to read the Sleeper column.
+
+*Why we render the page rather than calling the endpoint it calls.* That page
+authenticates its own request to `api.fantasypros.com/v2/...` with a key
+embedded in its JavaScript. The key is FantasyPros', not ours, and using it
+would be borrowing their credential to get past the limits on ours. Loading the
+page in a browser is what the page is served for; reading the table it draws is
+not the same act.
+
+*The browser.* Playwright drives the system Google Chrome if it is installed,
+which is why `playwright install` is not a deployment step here. On a host
+without Chrome, run `uv run playwright install chromium` once. A scrape takes
+about three seconds.
+
+*Coverage.* ~270 players carry a Sleeper ADP, against ~515 ranked. Every player
+with an ADP also has a ranking, so a pick inside the top 270 shows both board
+stats and one beyond it shows neither.
+
+*Fragility.* The page's shape is not a contract, so the extractor finds the
+Sleeper column by its **header text** rather than its position — FantasyPros can
+reorder the table without breaking this. If the column disappears entirely the
+sync fails loudly rather than silently storing an empty set, and
+`--source api` is the way back until the extractor is fixed.
+
+## Draft day
+
+`ffd-draft.timer` polls the draft board every 20 seconds. It is the one timer
+that is not enabled by default, because a process every 20 seconds all year to
+watch a draft that happens once is waste, not resilience.
+
+```bash
+systemctl --user start ffd-draft.timer     # before the draft
+journalctl --user -u ffd-draft -f          # watch it run
+systemctl --user stop  ffd-draft.timer     # afterwards
+```
+
+With it off the board still updates — `ffd sync` carries the draft too — just
+at five-minute resolution instead of twenty seconds. Costs, for reference: each
+run makes three Sleeper requests (~9/minute against a documented ceiling near
+1000), and a completed draft with every pick already stored skips the picks
+request, so leaving the timer on after the draft is harmless if you forget.
+
+The board's freshness comes from `draft.fetched_at`, shown in the page header —
+`ffd sync-draft` writes no `sync_run` row, which at this cadence would add
+~4,300 rows a day and bury the record of the real sync.
 
 ## Operations
 

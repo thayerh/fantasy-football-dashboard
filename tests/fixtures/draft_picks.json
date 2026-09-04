@@ -1,0 +1,40 @@
+[
+  {
+    "draft_id": "222000000000000002",
+    "pick_no": 2,
+    "round": 1,
+    "draft_slot": 2,
+    "roster_id": 1,
+    "picked_by": "1001",
+    "player_id": "6813",
+    "is_keeper": true,
+    "reactions": null,
+    "metadata": {
+      "first_name": "Jonathan",
+      "last_name": "Taylor",
+      "position": "RB",
+      "team": "IND",
+      "status": "Active",
+      "number": "28"
+    }
+  },
+  {
+    "draft_id": "222000000000000002",
+    "pick_no": 6,
+    "round": 2,
+    "draft_slot": 3,
+    "roster_id": 4,
+    "picked_by": "",
+    "player_id": "4034",
+    "is_keeper": null,
+    "reactions": null,
+    "metadata": {
+      "first_name": "Christian",
+      "last_name": "McCaffrey",
+      "position": "RB",
+      "team": "SF",
+      "status": "Active",
+      "number": "23"
+    }
+  }
+]

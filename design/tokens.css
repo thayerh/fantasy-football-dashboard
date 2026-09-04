@@ -87,6 +87,25 @@
   --status-error:     var(--unc-clay);
   --text-on-warn:     var(--unc-amber-ink);
 
+  /* --- Draft-board position colours ---------------------------------------
+     A deliberate exception to the one-supporting-colour rule: on a draft board
+     colour IS the data, and a 180-cell grid is unreadable without it. Sleeper's
+     own convention is honoured where the UNC palette allows (QB red, RB green,
+     WR blue, TE orange), so the board reads the way the league already expects.
+
+     Every one is a tint of an existing palette colour, tuned so that no two are
+     closer than 70 in RGB distance and navy clears 5.8:1 on all of them —
+     text inside a coloured cell is always navy, never the muted grey, which
+     would fail on the darker tints.
+
+       QB  8.21   RB  5.85   WR  8.24   TE  7.81   K  11.19   DEF 11.04  */
+  --pos-qb:  #F5B2B0;  /* Clay */
+  --pos-rb:  #73AFAD;  /* Piedmont Pine */
+  --pos-wr:  #9CC9E7;  /* Carolina Blue */
+  --pos-te:  #FFAD3D;  /* Tulip Poplar */
+  --pos-k:   #FFE079;  /* Ginkgo */
+  --pos-def: #DEE1E2;  /* Flat Gray */
+
   /* --- Type scale --------------------------------------------------------
      A fixed ratio (1.25, major third). Arbitrary one-off sizes are the most
      common tell of an unplanned interface. */

@@ -1,4 +1,5 @@
 import helmet from "../../../design/helmet.png";
+import { ROUTES, Link } from "../router";
 
 /**
  * The two-tier athletics chrome. Identical on every route by design — see
@@ -10,8 +11,19 @@ import helmet from "../../../design/helmet.png";
  * aria-current so the underline means something.
  */
 
-const UTILITY = ["League", "Draft", "Trades", "Keepers"];
-const SECTIONS = ["Standings", "Members", "Rosters", "Matchups"];
+const UTILITY = ["League", "Trades", "Keepers", "History"];
+const SECTIONS = ["Standings", "Draft", "Members", "Rosters"];
+
+/** A destination if we have built it, otherwise plain text. */
+function NavItem({ label, current }: { label: string; current: string }) {
+  const href = ROUTES[label];
+  if (!href) return <span>{label}</span>;
+  return (
+    <Link href={href} aria-current={label === current ? "page" : undefined}>
+      {label}
+    </Link>
+  );
+}
 
 export function Masthead({ current }: { current: string }) {
   return (
@@ -24,22 +36,16 @@ export function Masthead({ current }: { current: string }) {
         </div>
         <nav aria-label="Secondary">
           {UTILITY.map((item) => (
-            <span key={item}>{item}</span>
+            <NavItem key={item} label={item} current={current} />
           ))}
         </nav>
       </div>
       <div className="masthead-section">
         <span className="wordmark">Fantasy</span>
         <nav aria-label="Primary">
-          {SECTIONS.map((item) =>
-            item === current ? (
-              <a key={item} href="/" aria-current="page">
-                {item}
-              </a>
-            ) : (
-              <span key={item}>{item}</span>
-            ),
-          )}
+          {SECTIONS.map((item) => (
+            <NavItem key={item} label={item} current={current} />
+          ))}
         </nav>
       </div>
     </header>

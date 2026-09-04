@@ -106,7 +106,35 @@ field, the utility bar, and fills — areas, not letters.
   are the single most recognisable signature of an unconsidered UI.
 - More than one supporting colour (Ginkgo, Clay, Poplar, Pine) visible at once
   in the same panel. They are 5% of the palette and they buy attention only
-  while they stay rare.
+  while they stay rare. **One sanctioned exception**: the draft board's position
+  colours, below.
+
+### Position colour — the one exception
+
+The draft board tints each filled cell by the player's position. This breaks the
+rule directly above, and it earns it: on a 180-cell grid the colour *is* the
+data — it is how you read the shape of a roster at a glance — and every board
+the league already uses works this way. Sleeper's own convention is honoured
+where the palette allows, so the mapping is familiar on sight.
+
+| Position | Token | Tint | Navy on it |
+|---|---|---|---:|
+| QB | `--pos-qb` | `#F5B2B0` (Clay) | 8.21 |
+| RB | `--pos-rb` | `#73AFAD` (Piedmont Pine) | 5.85 |
+| WR | `--pos-wr` | `#9CC9E7` (Carolina Blue) | 8.24 |
+| TE | `--pos-te` | `#FFAD3D` (Tulip Poplar) | 7.81 |
+| K | `--pos-k` | `#FFE079` (Ginkgo) | 11.19 |
+| DEF | `--pos-def` | `#DEE1E2` (Flat Gray) | 11.04 |
+
+Every tint is derived from a palette colour, no two are closer than 70 in RGB
+distance (RB and WR were the pair that had to be forced apart), and navy clears
+4.5:1 on all six. Inside a tinted cell **all** text is navy — the muted grey
+drops below 3:1 on the darker tints. Positions with no token (IDP leagues) stay
+white rather than borrowing a colour that means something else.
+
+Because Ginkgo now belongs to the kicker, the keeper marker is a **navy inset
+edge**, not a yellow one: a marker that collides with a position tint marks
+nothing.
 
 ---
 
@@ -202,9 +230,10 @@ anyway.
 
 ## 4. Layout and spacing
 
-- One measure: `.wrap` at `66rem`, or `.wrap--wide` at `76rem` for pages with a
-  rail. Nothing sets its own max-width, which is why panels line up across
-  routes.
+- One measure: `.wrap` at `66rem`, `.wrap--wide` at `76rem` for pages with a
+  rail, `.wrap--board` at `96rem` for the draft board, which is twelve columns
+  wide and shares its page with nothing. Nothing sets its own max-width, which
+  is why panels line up across routes.
 - Two-column pages use `.layout` — a `15.5rem` rail beside the primary column.
   The rail is secondary by definition, so below `60rem` it moves *below* the
   main column rather than pushing it off the first screen.
@@ -293,6 +322,10 @@ Stale data is never presented as current. `/api/health` already returns
 | People / teams as cards | `.grid` + `.card` + `.avatar` + `.team` + `.handle` |
 | Columnar data | `.table-scroll` + `.stat-table` (`.rank`, `.num`, `.cell-team`) |
 | Headline numbers | `.stat-strip` + `.stat` (`.figure`, `.label`) |
+| Draft board | `.stat-table.draft-board` (`.slot-head`, `.round-cell`, `.board-cell`) |
+| Position colour | `.board-cell.pos-qb` … `.pos-def`, key via `.pos-key` |
+| Position badge | `.pos-chip` + the same `.pos-*` classes |
+| Filter row | `.filter-bar` + `.chip` (`.is-on` for the active one) |
 | Status word | `.tag`, `.tag--info`, `.tag--quiet` |
 | Data age | `.freshness`, `.freshness.is-stale` |
 | Action | `.btn` |

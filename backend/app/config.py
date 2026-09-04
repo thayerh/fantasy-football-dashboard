@@ -28,6 +28,17 @@ class Settings(BaseSettings):
     backup_dir: Path = Path("data/backups")
     backup_keep: int = 14
 
+    # FantasyPros. The free public tier allows 50 calls a day and caps every
+    # rankings response at 10 players, which is why the sync is daily and asks
+    # for one ranking set per position rather than paging through a big one.
+    fantasypros_key: str = ""
+    fantasypros_base_url: str = "https://api.fantasypros.com/public/v2/json"
+    fantasypros_scoring: str = "PPR"
+    fantasypros_timeout_seconds: float = 15.0
+    # Rendering the real-time ADP page is slower than any JSON call: a cold
+    # browser start plus the page's own data fetch. Generous on purpose.
+    fantasypros_browser_timeout_seconds: float = 45.0
+
     stale_after_seconds: int = 900
     static_dir: Path = Path("frontend/dist")
 

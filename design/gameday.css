@@ -413,6 +413,10 @@ body {
    primary column rather than pushing it off the first screen.
    ========================================================================= */
 .wrap--wide { max-width: 76rem; }
+/* The draft board is 12 columns wide and nothing else on the page competes
+   with it, so it gets a measure of its own. At 96rem the whole board lands on
+   a large monitor without scrolling; below that it scrolls in its panel. */
+.wrap--board { max-width: 96rem; }
 
 .layout {
   display: grid;
@@ -569,3 +573,321 @@ body {
 .skeleton--sub { display: inline-block; height: var(--step-0); width: 11rem; vertical-align: middle; }
 .cell-team .who .skeleton--line { width: 9rem; }
 .cell-team .who .skeleton--line + .skeleton--line { width: 6rem; margin-top: var(--space-2); }
+
+/* ===========================================================================
+   DRAFT BOARD
+   ---------------------------------------------------------------------------
+   Rounds down, draft slots across. It is built on .stat-table — the navy head
+   and the hairline rows are the same components the standings use — with a
+   fixed layout, a sticky round column, and cells sized to hold a name.
+
+   Twelve columns never fit a laptop beside the rail, so the board scrolls
+   inside .table-scroll (as every wide table does) and the round column stays
+   pinned, which is what keeps a horizontally scrolled cell readable.
+   ========================================================================= */
+.draft-board { table-layout: fixed; min-width: 100%; }
+.draft-board th,
+.draft-board td { padding: var(--space-2) var(--space-3); }
+
+/* Column heads: slot number over the team's name. */
+.draft-board .slot-head { width: 7.5rem; vertical-align: bottom; }
+.draft-board .slot-no {
+  display: block;
+  color: var(--unc-fordham);
+  font-size: var(--step--1);
+  font-variant-numeric: tabular-nums;
+}
+.draft-board .slot-name {
+  /* Two lines, clamped. The column heads name the twelve people the board is
+     about, so they are set at body size rather than as fine print — and two
+     lines fit most real team names where one line truncated nearly all of
+     them. The full name stays in the title attribute regardless. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  font-family: "Open Sans", sans-serif;
+  font-weight: 600;
+  font-size: var(--step-0);
+  line-height: 1.2;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--unc-white);
+  overflow: hidden;
+  /* .stat-table's head sets nowrap for its own columns; the board's heads are
+     the one place that has to wrap. */
+  white-space: normal;
+  /* A long unbroken handle would otherwise widen the whole column. */
+  overflow-wrap: anywhere;
+}
+
+/* The pinned round column. Both halves need an opaque background of their own,
+   or the scrolled cells show through them. */
+.draft-board .round-head,
+.draft-board .round-cell {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  width: 3rem;
+  text-align: center;
+}
+.draft-board .round-head { background: var(--unc-navy); }
+.draft-board .round-cell {
+  background: var(--unc-cloud);
+  border-right: 1px solid var(--border-subtle);
+  font-family: "Oswald", sans-serif;
+  font-weight: 700;
+  font-size: var(--step-1);
+  color: var(--text-link);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Cells. A fixed height stops the grid jolting as picks land. */
+.board-cell {
+  height: 5.5rem;
+  vertical-align: top;
+  border-left: 1px solid var(--unc-franklin-fog);
+}
+.board-cell .pick-no {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.board-cell .player {
+  display: block;
+  margin-top: 2px;
+  font-family: "Oswald", sans-serif;
+  font-weight: 600;
+  font-size: var(--step-0);
+  line-height: 1.1;
+  color: var(--text-strong);
+}
+/* Given name over surname, always — never wrapped at whatever width the name
+   happens to need. Every cell then puts its surname, position and deltas on the
+   same baseline, so a column can be read down rather than name by name. */
+.board-cell .player span { display: block; }
+.board-cell .pos {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--step--1);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+/* What the pick cost against the market. Deliberately the quietest line in the
+   cell: it is context for the name above it, not the headline. Positive means
+   the player lasted past where he usually goes; negative means a reach. */
+.pick-delta {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: 3px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.pick-delta span { white-space: nowrap; }
+
+/* Position colour. The cell carries it, not a badge: the point is to read the
+   shape of a roster across the board at a glance, which a small chip cannot
+   do. Unknown positions (IDP leagues) simply stay white. */
+.board-cell.pos-qb { background: var(--pos-qb); }
+.board-cell.pos-rb { background: var(--pos-rb); }
+.board-cell.pos-wr { background: var(--pos-wr); }
+.board-cell.pos-te { background: var(--pos-te); }
+.board-cell.pos-k { background: var(--pos-k); }
+.board-cell.pos-def { background: var(--pos-def); }
+
+/* On a tinted cell the muted grey drops below 3:1. Everything goes navy, and
+   hierarchy is carried by size and weight instead of colour. */
+.board-cell[class*="pos-"] .pick-no,
+.board-cell[class*="pos-"] .pos { color: var(--text-strong); }
+
+/* No hover state at all. .stat-table highlights the row under the cursor,
+   which earns its keep when you are tracking a number across a wide row — but
+   a draft board is read in columns and blocks of colour, and a wash sweeping
+   across fifteen cells fights the position tints instead of helping. */
+.draft-board tbody tr:hover { background: transparent; }
+
+/* Keepers: navy edge, not Ginkgo — Ginkgo is now the kicker's colour, and a
+   marker that collides with a position tint marks nothing. */
+.board-cell.is-keeper { box-shadow: inset 3px 0 0 var(--unc-navy); }
+.board-cell.is-empty .pick-no { color: var(--unc-flat-gray); }
+
+/* --- Position key -------------------------------------------------------- */
+.pos-key { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+.pos-key span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--step--1);
+  color: var(--text-muted);
+}
+.pos-key i {
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--unc-cloud);
+}
+
+@media (max-width: 48rem) {
+  .draft-board th,
+  .draft-board td { padding: var(--space-2); }
+  .draft-board .slot-head { width: 6.5rem; }
+  .draft-board .round-cell,
+  .draft-board .round-head { width: 2.25rem; }
+  .board-cell { height: 5rem; }
+  /* At this width the two stats would wrap. ADP is the one that stays: "did
+     this pick reach" is the question a board is read for, and the consensus
+     gap is the slower, more analytical read. */
+  .pick-delta span + span { display: none; }
+}
+
+/* Key swatches reuse the board's own tokens, so the legend can never drift
+   from the cells it explains. */
+.pos-key .k-qb { background: var(--pos-qb); }
+.pos-key .k-rb { background: var(--pos-rb); }
+.pos-key .k-wr { background: var(--pos-wr); }
+.pos-key .k-te { background: var(--pos-te); }
+.pos-key .k-k { background: var(--pos-k); }
+.pos-key .k-def { background: var(--pos-def); }
+
+/* ===========================================================================
+   BEST AVAILABLE
+   ---------------------------------------------------------------------------
+   A filtered list under the board. Shares .stat-table with everything else;
+   what it adds is the position filter and a compact position chip that reuses
+   the board's colour tokens, so a position reads the same in both places.
+   ========================================================================= */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--unc-franklin-fog);
+}
+/* Names what the row of chips does, so two stacked bars cannot be mistaken for
+   one long wrapped set of filters. */
+.filter-label {
+  align-self: center;
+  margin-right: var(--space-2);
+  font-size: var(--step--1);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+}
+.chip {
+  font-family: "Oswald", sans-serif;
+  font-weight: 600;
+  font-size: var(--step--1);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-link);
+  background: var(--unc-cloud);
+  border: 0;
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.chip:hover { background: var(--unc-fordham); }
+/* The selected filter is the one place navy fill earns its weight: it has to
+   win against six siblings without colour, since colour already means
+   position here. */
+.chip.is-on { background: var(--surface-inverse); color: var(--text-on-navy); }
+
+.pos-chip {
+  display: inline-block;
+  min-width: 3rem;
+  text-align: center;
+  font-family: "Oswald", sans-serif;
+  font-weight: 600;
+  font-size: var(--step--1);
+  letter-spacing: 0.06em;
+  color: var(--text-strong);
+  background: var(--unc-franklin-fog);
+  border-radius: var(--radius-sm);
+  padding: 2px var(--space-2);
+}
+/* Same tokens as the board's cells — a position cannot drift between them. */
+.pos-chip.pos-qb { background: var(--pos-qb); }
+.pos-chip.pos-rb { background: var(--pos-rb); }
+.pos-chip.pos-wr { background: var(--pos-wr); }
+.pos-chip.pos-te { background: var(--pos-te); }
+.pos-chip.pos-k { background: var(--pos-k); }
+.pos-chip.pos-def { background: var(--pos-def); }
+
+/* Without hints the player column absorbs every spare pixel and pushes the
+   rest to the far edge of a 96rem panel. */
+.available-table .col-pos { width: 9rem; }
+.available-table .col-team,
+.available-table .col-bye,
+.available-table .col-tier { width: 6rem; }
+.available-table .col-adp { width: 7.5rem; }
+.available-table .col-ecr { width: 5.5rem; }
+.available-table .col-proj { width: 6rem; }
+.available-table .col-lead { width: 6.5rem; }
+/* The leading measure is right-aligned, so .stat-table's generous left padding
+   only pushes it away from the panel edge and leaves a gap wide enough to read
+   as a missing column. The right side keeps the standard gutter. */
+.available-table thead th.col-lead,
+.available-table td.col-lead { padding-left: var(--space-3); }
+
+/* --- Where your picks land -----------------------------------------------
+   The slot you draft from, and a rule across the table wherever one of your
+   turns is projected to come round. The rule sits on *top* of the row because
+   that is the reading: everything above this line is expected to be gone. */
+.slot-select {
+  align-self: center;
+  font-family: "Oswald", sans-serif;
+  font-weight: 600;
+  font-size: var(--step--1);
+  letter-spacing: 0.04em;
+  color: var(--text-link);
+  background: var(--unc-cloud);
+  border: 1px solid var(--unc-fordham);
+  border-radius: var(--radius-pill);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+}
+.slot-select:focus-visible { outline: 2px solid var(--unc-bolin-creek); outline-offset: 2px; }
+
+/* Carolina blue, not navy: navy already means "selected filter" on this
+   panel, and a second navy would read as a third control rather than a
+   position on the board. Two pixels so it survives beside the 1px row rules.
+
+   The rule and the caption carry it on their own: tinting the row as well
+   would collide with the hover highlight, and a marked row you happen to be
+   pointing at would look no different from a row you are not. */
+.available-table tr.is-my-pick > td { border-top: 2px solid var(--unc-carolina); }
+.pick-note {
+  display: block;
+  margin-top: 2px;
+  font-family: "Oswald", sans-serif;
+  font-weight: 500;
+  font-size: var(--step--1);
+  letter-spacing: 0.04em;
+  color: var(--text-link);
+}
+
+/* The positional rank, beside its chip. */
+.pos-rank {
+  margin-left: var(--space-2);
+  font-size: var(--step--1);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.player-name {
+  font-family: "Oswald", sans-serif;
+  font-weight: 600;
+  font-size: var(--step-0);
+  letter-spacing: 0.01em;
+}
+/* Coastal Sand with amber ink: the same measured pair the stale pill uses. */
+.tag.injury {
+  margin-left: var(--space-3);
+  background: var(--unc-coastal-sand);
+  color: var(--text-on-warn);
+}
