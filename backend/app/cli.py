@@ -8,6 +8,7 @@ member could fire. Requiring shell access is the authorization boundary.
 
 from __future__ import annotations
 
+import datetime as dt
 import json
 import logging
 import sys
@@ -19,7 +20,8 @@ import typer
 from app.backup import create_backup, prune_backups, restore_backup
 from app.config import REPO_ROOT, get_settings
 from app.db import session_scope, utcnow
-from app.dynasty import DynastyParseError, read_export
+from app.dynasty import DynastyParseError, read_export, write_snapshot
+from app.feeds import FeedClient, fetch_boards
 from app.ingest import (
     sync_draft,
     sync_dynasty_rankings,
@@ -178,14 +180,14 @@ def import_rankings_command(
     a file whose format has changed under us fails loudly instead of importing
     as something else.
 
-    Four boards are recognised — FantasyPros dynasty, FantasyCalc, TheTradeCalc
-    and Sleeper ADP. Each replaces only its own rows, so re-importing one
-    leaves the other three alone.
+    Recognised: the FantasyPros dynasty, FantasyCalc, TheTradeCalc and Sleeper
+    ADP exports, and the snapshots `ffd fetch-rankings` writes to
+    data/rankings/. Each replaces only its own rows, so re-importing one
+    leaves the others alone.
 
-    Like `sync-vegas`, this reads files rather than a service: the exports are
-    downloaded by hand, so there is no timer and nothing here pretends the
-    numbers are fresher than the last import. Run `ffd sync-players` first —
-    rankings are stored against Sleeper player ids.
+    The way to load Sleeper ADP, which has no feed, and to put back an earlier
+    day's fetched boards. Run `ffd sync-players` first — rankings are stored
+    against Sleeper player ids.
     """
     _configure_logging(verbose)
 
@@ -214,7 +216,7 @@ def import_rankings_command(
 
     for source, path, written, total in results:
         typer.secho(
-            f"  {source:<13} {written:>4} of {total:>4} matched  ({path.name})",
+            f"  {source:<21} {written:>4} of {total:>4} matched  ({path.name})",
             fg=typer.colors.GREEN if written else typer.colors.YELLOW,
         )
     typer.secho(
@@ -242,6 +244,86 @@ def _ranking_files(paths: list[Path]) -> list[Path]:
     if not files:
         raise ValueError(f"No .csv exports found in {', '.join(str(p) for p in paths)}")
     return files
+
+
+@app.command(name="fetch-rankings")
+def fetch_rankings_command(
+    import_: Annotated[
+        bool,
+        typer.Option("--import/--no-import", help="Store the boards, not just the CSVs."),
+    ] = True,
+    verbose: bool = False,
+) -> None:
+    """Fetch the ranking boards from the sites, save them as CSV, and import them.
+
+    Daily, from ffd-rankings.timer. Pulls FantasyPros, FantasyCalc,
+    TheTradeCalc and KeepTradeCut dynasty boards — the four the aggregate
+    averages — plus redraft boards from the last three, kept as separate
+    sources and out of the average.
+
+    History is kept twice. Every board is written to
+    `data/rankings/<date>/<source>.csv` (never pruned) and to
+    `data/rankings/latest/`, whatever happens to the import, so the day's
+    numbers survive even if the database does not. And each stored board is
+    also appended to `dynasty_ranking_history` under today's date, for
+    querying a player's trend. Any snapshot directory
+    re-imports with `ffd import-rankings data/rankings/<date>`.
+
+    A board that fails to fetch or parse is skipped and the others still land;
+    the command then exits 1 so systemd marks the run failed. Run
+    `ffd sync-players` first — rankings are stored against Sleeper ids.
+    """
+    _configure_logging(verbose)
+    settings = get_settings()
+
+    with FeedClient(settings) as client:
+        boards, failures = fetch_boards(client)
+
+    # Snapshots first: they are the record of what the sites said today, and
+    # they are worth keeping even when the import below fails.
+    # The local date, not UTC: the timer fires on the local clock, and an
+    # evening run should not file itself under tomorrow.
+    as_of = dt.datetime.now().astimezone().date()
+    root = settings.resolved_rankings_dir
+    today = root / as_of.isoformat()
+    latest = root / "latest"
+    for folder in (today, latest):
+        folder.mkdir(parents=True, exist_ok=True)
+    for source, rows in boards.items():
+        text = write_snapshot(source, rows)
+        for folder in (today, latest):
+            (folder / f"{source}.csv").write_text(text, encoding="utf-8")
+    if boards:
+        typer.echo(f"Saved {len(boards)} board(s) to {today}")
+
+    stored: dict[str, int] = {}
+    if import_ and boards:
+        with session_scope() as session:
+            for source, rows in boards.items():
+                try:
+                    stored[source] = sync_dynasty_rankings(session, source, rows, as_of=as_of)
+                    # Per board, so one that fails to store leaves the others
+                    # committed — the same independence the fetch has.
+                    session.commit()
+                except Exception as exc:
+                    session.rollback()
+                    log.error("Could not store %s: %s: %s", source, type(exc).__name__, exc)
+                    failures[source] = exc
+
+    for source, rows in boards.items():
+        if source in stored:
+            typer.secho(
+                f"  {source:<21} {stored[source]:>4} of {len(rows):>4} matched",
+                fg=typer.colors.GREEN if stored[source] else typer.colors.YELLOW,
+            )
+        elif source not in failures:
+            typer.echo(f"  {source:<21} {len(rows):>4} fetched")
+    for source, exc in failures.items():
+        typer.secho(f"  {source:<21} FAILED  {exc}", fg=typer.colors.RED)
+
+    if failures:
+        raise typer.Exit(code=1)
+    typer.secho(f"Fetched {len(boards)} board(s).", fg=typer.colors.GREEN)
 
 
 @app.command(name="sync-vegas")

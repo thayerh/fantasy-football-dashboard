@@ -16,7 +16,14 @@ from sqlalchemy import Select, func, null, select
 
 from app.config import get_settings
 from app.db import DbSession
-from app.dynasty import ALL_SOURCES, CONSENSUS_SOURCES, FANTASYCALC, FANTASYPROS, SLEEPER_ADP
+from app.dynasty import (
+    ALL_SOURCES,
+    CONSENSUS_SOURCES,
+    FANTASYCALC,
+    FANTASYPROS,
+    REDRAFT_SOURCES,
+    SLEEPER_ADP,
+)
 from app.models import (
     Draft,
     DraftPick,
@@ -205,10 +212,11 @@ def list_available(
 ) -> list[PlayerOut]:
     """Best available: the player pool minus everyone already drafted.
 
-    Five orderings, because in dynasty "best" has no single answer: three
+    Several orderings, because in dynasty "best" has no single answer: four
     published boards disagree about it by design, the Sleeper market disagrees
-    with all three, and the aggregate is the average of the three that are
-    opinions rather than outcomes.
+    with all of them, and the aggregate is the average of the four that are
+    opinions rather than outcomes. The redraft boards order by this season
+    alone, and stay out of the aggregate.
 
     **Every row carries every board's rank whichever one is ordering.** That is
     the point of the page — a player the aggregate has 14th and Sleeper drafters
@@ -340,8 +348,17 @@ def list_available(
     projected = dict(enumerate(open_picks, start=1))
 
     out: list[PlayerOut] = []
+    redraft = board in REDRAFT_SOURCES
     for player, vegas, cons, sources, ordinal in rows:
         by_source = opinions.get(player.player_id, {})
+        # The detail columns draw only from boards of the kind in play: a
+        # redraft value is a different currency from a dynasty one, and a
+        # dynasty tab quietly showing one would read as a dynasty opinion.
+        same_kind = {
+            source: row
+            for source, row in by_source.items()
+            if (source in REDRAFT_SOURCES) == redraft
+        }
 
         # The detail columns are deliberately **not** tied to the board in
         # play. They come from whichever board publishes each thing, so the
@@ -349,13 +366,13 @@ def list_available(
         # of a page built for comparing boards. Tying them to the active tab
         # blanks Tier on four tabs of five and the value on two, which reads
         # as missing data rather than as a difference between the exports.
-        detail = _from(by_source, "tier", FANTASYPROS)
-        spread = _from(by_source, "rank_min", FANTASYPROS)
-        # A value only on the two boards that price players rather than order
-        # them, and the active one wins between those two — their scales are
+        detail = _from(same_kind, "tier", FANTASYPROS)
+        spread = _from(same_kind, "rank_min", FANTASYPROS)
+        # A value only on the boards that price players rather than order
+        # them, and the active one wins between those — their scales are
         # different currencies and are not comparable with each other.
-        priced = _from(by_source, "value", board, FANTASYCALC)
-        labelled = _from(by_source, "pos_rank", board, FANTASYPROS)
+        priced = _from(same_kind, "value", board, FANTASYCALC)
+        labelled = _from(same_kind, "pos_rank", board, FANTASYPROS)
 
         out.append(
             PlayerOut(
@@ -377,7 +394,7 @@ def list_available(
                 rank_max=spread.rank_max if spread else None,
                 # Whichever board has one. Only FantasyPros and FantasyCalc
                 # publish an age, and they agree to within a year.
-                ranked_age=(age.age if (age := _from(by_source, "age")) else None),
+                ranked_age=(age.age if (age := _from(same_kind, "age")) else None),
                 expected_pick=projected.get(ordinal) if ordinal is not None else None,
                 vegas_points=vegas,
             )

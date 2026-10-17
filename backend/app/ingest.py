@@ -24,6 +24,7 @@ from app.models import (
     Draft,
     DraftPick,
     DynastyRanking,
+    DynastyRankingHistory,
     League,
     LeagueUser,
     NflPlayer,
@@ -556,8 +557,18 @@ def _resolve_player(entry: dict[str, Any], index: _PlayerIndex) -> str | None:
     return None
 
 
-def sync_dynasty_rankings(session: Session, source: str, rows: list[dict[str, Any]]) -> int:
+def sync_dynasty_rankings(
+    session: Session,
+    source: str,
+    rows: list[dict[str, Any]],
+    as_of: dt.date | None = None,
+) -> int:
     """Replace one source's board with a parsed export. Returns rows written.
+
+    With `as_of`, the board is also recorded in `dynasty_ranking_history` for
+    that day, replacing whatever that source had there already. `ffd
+    fetch-rankings` passes it; hand imports do not, since a file imported today
+    may say what a site said last month.
 
     Only that source's rows are touched. Each export is downloaded and imported
     by hand at its own moment, and a re-import of one board must not disturb
@@ -617,6 +628,29 @@ def sync_dynasty_rankings(session: Session, source: str, rows: list[dict[str, An
     session.execute(delete(DynastyRanking).where(DynastyRanking.source == source))
     if matched:
         session.execute(insert(DynastyRanking), list(matched.values()))
+
+    if as_of is not None:
+        session.execute(
+            delete(DynastyRankingHistory).where(
+                DynastyRankingHistory.as_of == as_of, DynastyRankingHistory.source == source
+            )
+        )
+        if matched:
+            session.execute(
+                insert(DynastyRankingHistory),
+                [
+                    {
+                        "as_of": as_of,
+                        "source": source,
+                        "player_id": row["player_id"],
+                        "overall_rank": row["overall_rank"],
+                        "position_rank": row["position_rank"],
+                        "tier": row["tier"],
+                        "value": row["value"],
+                    }
+                    for row in matched.values()
+                ],
+            )
 
     if unmatched:
         # Not an error: every one of these boards ranks rookies and free agents

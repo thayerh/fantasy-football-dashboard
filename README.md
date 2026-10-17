@@ -46,7 +46,8 @@ terminal `npm --prefix frontend run dev` — Vite proxies `/api` to port 8000.
 |---|---|
 | `uv run ffd sync` | Fetch the league, members, rosters, picks and draft into SQLite |
 | `uv run ffd sync-players` | Refresh the Sleeper player pool (daily at most) |
-| `uv run ffd import-rankings` | Import the dynasty ranking exports from `data/` |
+| `uv run ffd fetch-rankings` | Fetch FantasyPros, FantasyCalc, TheTradeCalc and KTC boards, save dated CSVs, import (daily timer) |
+| `uv run ffd import-rankings` | Import hand exports from `data/`, or a saved snapshot from `data/rankings/<date>/` |
 | `uv run ffd sync-vegas <file>` | Import Vegas season projections |
 | `uv run ffd status` | Show recent sync runs |
 | `uv run ffd backup` | Write a verified snapshot, prune old ones |

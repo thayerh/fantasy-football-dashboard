@@ -153,23 +153,29 @@ export interface Draft {
 /**
  * Which ranking orders "best available".
  *
- * Four boards and their average. `aggregate` is not a source — the server
- * computes it per request as the mean of the three published rankings, leaving
- * `sleeper-adp` out: that one is what the market *did*, and folding an outcome
- * into an average of opinions would double-count it.
+ * Four dynasty boards and their average, the Sleeper market, and three redraft
+ * boards. `aggregate` is not a source — the server computes it per request as
+ * the mean of the four dynasty boards, leaving `sleeper-adp` out (it is what the
+ * market *did*, and folding an outcome into an average of opinions would
+ * double-count it) and the redraft boards out (this season only is a different
+ * question from who is worth owning).
  */
 export const BOARDS = [
-  { value: "aggregate", label: "Aggregate", meta: "Average of the three dynasty boards" },
-  { value: "fantasypros", label: "FantasyPros", meta: "FantasyPros dynasty consensus" },
+  { value: "aggregate", label: "Aggregate", meta: "Average of the four dynasty boards" },
+  { value: "fantasypros", label: "FantasyPros", meta: "FantasyPros dynasty superflex consensus" },
   { value: "fantasycalc", label: "FantasyCalc", meta: "FantasyCalc dynasty trade values" },
   { value: "thetradecalc", label: "TheTradeCalc", meta: "TheTradeCalc 12-team superflex PPR" },
+  { value: "ktc", label: "KTC", meta: "KeepTradeCut dynasty superflex values" },
   { value: "sleeper-adp", label: "Sleeper ADP", meta: "Where Sleeper drafters actually take him" },
+  { value: "fantasycalc-redraft", label: "FC Redraft", meta: "FantasyCalc redraft values — this season only" },
+  { value: "thetradecalc-redraft", label: "TTC Redraft", meta: "TheTradeCalc redraft values — this season only" },
+  { value: "ktc-redraft", label: "KTC Redraft", meta: "KeepTradeCut redraft values — this season only" },
 ] as const;
 
 export type Board = (typeof BOARDS)[number]["value"];
 
-/** The three that make up the aggregate, in the order the table shows them. */
-export const CONSENSUS_BOARDS = ["fantasypros", "fantasycalc", "thetradecalc"] as const;
+/** The four that make up the aggregate, in the order the table shows them. */
+export const CONSENSUS_BOARDS = ["fantasypros", "fantasycalc", "thetradecalc", "ktc"] as const;
 
 export interface Player {
   player_id: string;

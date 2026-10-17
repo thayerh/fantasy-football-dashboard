@@ -1,0 +1,16 @@
+[Unit]
+Description=Fetch the dynasty and redraft ranking boards
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/devcode/fantasy/fantasy-football-dashboard
+ExecStart=/usr/bin/env uv run ffd fetch-rankings
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+# Seven boards from four sites: FantasyPros, FantasyCalc, TheTradeCalc and
+# KeepTradeCut. Writes data/rankings/<date>/*.csv and imports them. One board
+# failing still lets the others land, then exits 1 so this unit shows failed.
+
+[Install]
+WantedBy=default.target

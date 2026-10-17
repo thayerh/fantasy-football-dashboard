@@ -13,10 +13,11 @@ import { boardRounds, positionClass } from "./DraftBoard";
 /**
  * Best available: the player pool minus everyone already drafted.
  *
- * Five tabs, because in dynasty there is no single answer to "who is best".
- * Three published boards disagree about it on purpose — they are pricing
- * different things — the Sleeper market disagrees with all three, and the
- * aggregate is the mean of the three that are opinions rather than outcomes.
+ * A tab per board, because in dynasty there is no single answer to "who is
+ * best". Four published boards disagree about it on purpose — they are pricing
+ * different things — the Sleeper market disagrees with all of them, and the
+ * aggregate is the mean of the four that are opinions rather than outcomes.
+ * The redraft tabs order by this season alone and sit outside the aggregate.
  *
  * **Every row shows every board whichever tab is active.** That is the page:
  * the tab only decides the ordering, and the value is in reading across. A
@@ -44,10 +45,11 @@ const FILTERS: (string | null)[] = [null, "QB", "RB", "WR", "TE", "FLEX", "SUPER
 
 /** The rank columns, in reading order: the average first, then its parts. */
 const RANK_COLUMNS: { board: Board; label: string; title: string }[] = [
-  { board: "aggregate", label: "AGG", title: "Average of the three dynasty boards" },
-  { board: "fantasypros", label: "FP", title: "FantasyPros dynasty consensus" },
+  { board: "aggregate", label: "AGG", title: "Average of the four dynasty boards" },
+  { board: "fantasypros", label: "FP", title: "FantasyPros dynasty superflex consensus" },
   { board: "fantasycalc", label: "FC", title: "FantasyCalc dynasty" },
   { board: "thetradecalc", label: "TTC", title: "TheTradeCalc 12-team superflex PPR" },
+  { board: "ktc", label: "KTC", title: "KeepTradeCut dynasty superflex" },
   { board: "sleeper-adp", label: "ADP", title: "Where Sleeper drafters actually take him" },
 ];
 
@@ -230,7 +232,7 @@ function PlayerRow({
             title={`Mean of ${player.consensus_sources} of ${CONSENSUS_BOARDS.length} dynasty boards`}
           >
             {player.consensus}
-            {/* Ranked by fewer than all three: the mean is over a smaller and
+            {/* Ranked by fewer than all four: the mean is over a smaller and
                 more flattering sample, and the row says so rather than letting
                 a one-board favourite pass for a consensus pick. */}
             {player.consensus_sources < CONSENSUS_BOARDS.length && (
@@ -450,10 +452,11 @@ export function AvailablePlayers() {
 
       <div className="panel-foot">
         <p className="note">
-          <strong>AGG</strong> is the mean of FantasyPros, FantasyCalc and TheTradeCalc;
-          Sleeper ADP is left out of it deliberately, since it is what the room
-          <em> did</em> rather than what anyone thinks. A <code>/2</code> beside an
-          aggregate means only two of the three ranked him, so it is the more
+          <strong>AGG</strong> is the mean of FantasyPros, FantasyCalc, TheTradeCalc and
+          KTC, refreshed daily; Sleeper ADP is left out of it deliberately, since it is
+          what the room <em> did</em> rather than what anyone thinks, and so are the
+          redraft boards. A <code>/2</code> beside an aggregate means only two of the
+          four ranked him, so it is the more
           flattering average of a smaller sample. The gap between{" "}
           <strong>AGG</strong> and <strong>ADP</strong> is where a startup is won: a
           player the boards rate well above where Sleeper takes him is the one to wait

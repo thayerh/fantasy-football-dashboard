@@ -11,7 +11,7 @@ from __future__ import annotations
 import datetime as dt
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, Float, Integer, String, Text
+from sqlalchemy import JSON, Boolean, Date, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base, UtcDateTime, utcnow
@@ -310,6 +310,32 @@ class DynastyRanking(Base):
     source_name: Mapped[str | None] = mapped_column(String)
 
     fetched_at: Mapped[dt.datetime] = mapped_column(UtcDateTime, default=utcnow)
+
+
+class DynastyRankingHistory(Base):
+    """Every fetched board, every day: one row per (date, source, player).
+
+    `dynasty_ranking` is a snapshot by design — each import replaces its
+    source's rows, and the board reads only today's. This is the record of
+    the days before: what each board said about each player on each day
+    `ffd fetch-rankings` ran, for reading a player's trend rather than his
+    position. Append-only in practice; a second fetch on the same day replaces
+    that day's rows for the boards it fetched, so a re-run cannot double-count.
+
+    Only the columns a trend needs. The full payload for any day — every
+    column every site published — is the CSV in data/rankings/<date>/.
+    """
+
+    __tablename__ = "dynasty_ranking_history"
+
+    as_of: Mapped[dt.date] = mapped_column(Date, primary_key=True)
+    source: Mapped[str] = mapped_column(String, primary_key=True)
+    player_id: Mapped[str] = mapped_column(String, primary_key=True, index=True)
+
+    overall_rank: Mapped[int] = mapped_column(Integer)
+    position_rank: Mapped[int | None] = mapped_column(Integer)
+    tier: Mapped[int | None] = mapped_column(Integer)
+    value: Mapped[float | None] = mapped_column(Float)
 
 
 class PlayerProjection(Base):
