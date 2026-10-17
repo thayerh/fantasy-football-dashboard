@@ -141,7 +141,7 @@ function Columns() {
         <th className="col-pos">Pos</th>
         <th className="num col-team">NFL</th>
         <th className="num col-age">Age</th>
-        <th className="num col-agg" title="Mean rank across the three dynasty boards">
+        <th className="num col-agg" title="Mean rank across the four dynasty boards">
           AGG
         </th>
         <th className="num col-proj" title="Vegas-derived projected points for the season">
@@ -304,7 +304,7 @@ export function RosterPanel({ team, lineup, limits }: {
               Open rows are spots nobody is in: {limits.bench} bench behind{" "}
               {limits.starters} starters make the {limits.active}-man active roster, and the{" "}
               {limits.taxi} taxi and {limits.reserve} IR spots sit outside it (rulebook §2.2).
-              AGG is the mean rank across the three dynasty boards; Proj is Vegas-derived
+              AGG is the mean rank across the four dynasty boards; Proj is Vegas-derived
               points for the season, and stops before the deep end of a bench.
             </p>
           </div>

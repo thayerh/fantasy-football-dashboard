@@ -37,6 +37,13 @@ class Settings(BaseSettings):
     nflverse_max_retries: int = 3
     nflverse_history_seasons: int = 10
 
+    # The daily ranking fetch (`ffd fetch-rankings`). Four public sites, no
+    # keys; the timeout is generous because KTC's page is ~3 MB. Snapshots land
+    # in `rankings_dir/<date>/` and `rankings_dir/latest/`.
+    rankings_timeout_seconds: float = 30.0
+    rankings_max_retries: int = 3
+    rankings_dir: Path = Path("data/rankings")
+
     stale_after_seconds: int = 900
     static_dir: Path = Path("frontend/dist")
 
@@ -55,6 +62,10 @@ class Settings(BaseSettings):
     @property
     def resolved_backup_dir(self) -> Path:
         return self._resolve(self.backup_dir)
+
+    @property
+    def resolved_rankings_dir(self) -> Path:
+        return self._resolve(self.rankings_dir)
 
     @property
     def resolved_static_dir(self) -> Path:

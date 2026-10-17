@@ -13,8 +13,9 @@ ffd-draft.timer ──▶ ffd-draft.service (oneshot: `ffd sync-draft`) ──�
                                                                     ├─▶ data/ffd.db (WAL)
 ffd-api.service (uvicorn, long-running) ─── reads only ─────────────┘
                                                     ▲
-ffd-backup.timer  ──▶ ffd-backup.service            │
-ffd-players.timer ──▶ ffd-players.service           │
+ffd-backup.timer   ──▶ ffd-backup.service           │
+ffd-players.timer  ──▶ ffd-players.service          │
+ffd-rankings.timer ──▶ ffd-rankings.service         │
                                                     │
 cloudflared (ffd-tunnel.service) ──▶ 127.0.0.1:8000 ┘
 ```
@@ -100,7 +101,7 @@ cp deploy/ffd-*.service deploy/ffd-*.timer ~/.config/systemd/user/
 systemctl --user daemon-reload
 
 systemctl --user enable --now ffd-api ffd-tunnel ffd-sync.timer ffd-backup.timer \
-                             ffd-players.timer
+                             ffd-players.timer ffd-rankings.timer
 
 # The draft board's fast poll. Deliberately NOT enabled by default — see below.
 # systemctl --user start ffd-draft.timer
@@ -134,43 +135,66 @@ uv run ffd sync-players
 
 ## Dynasty rankings
 
-`ffd import-rankings` fills the "best available" ordering. It reads **files**,
-not services: the four boards are exports you download by hand, so there is no
-timer behind them and nothing pretends the numbers are fresher than your last
-import. Run `ffd sync-players` first — rankings are stored against Sleeper
-player ids.
+The "best available" ordering comes from the ranking boards, and four of them
+fetch themselves. `ffd fetch-rankings` runs daily from `ffd-rankings.timer`
+(07:30, after the player pool refresh) and pulls each board straight from the
+site — no browser, no keys:
+
+| source | where it comes from | rows |
+|---|---|---|
+| `fantasypros` | FantasyPros dynasty **superflex** page, its embedded `ecrData` | ~400 |
+| `fantasycalc` | FantasyCalc's values API (12 teams, 2 QB, PPR) | ~400 |
+| `thetradecalc` | TheTradeCalc's assets API, 12-team superflex PPR baseline | ~600 |
+| `ktc` | KeepTradeCut's dynasty-rankings page, its embedded `ktc-players` JSON | ~460 |
+| `fantasycalc-redraft` | FantasyCalc, redraft | ~200 |
+| `thetradecalc-redraft` | TheTradeCalc, redraft value | ~450 |
+| `ktc-redraft` | KeepTradeCut's fantasy-rankings page | ~300 |
+| `sleeper-adp` | where Sleeper drafters actually take him — **hand export only** | ~280 |
 
 ```bash
-uv run ffd import-rankings                        # every *.csv in data/
-uv run ffd import-rankings ~/Downloads/board.csv  # or one file
+uv run ffd fetch-rankings              # fetch, snapshot, import
+uv run ffd fetch-rankings --no-import  # fetch and snapshot only
 ```
 
-**Four boards, and one average of three of them.**
+**History is kept.** Every run writes each board to
+`data/rankings/<YYYY-MM-DD>/<source>.csv` — every column the site published,
+not just the ones the app stores — plus a copy in `data/rankings/latest/`.
+The dated folders are never pruned (about 300 KB a day). Each stored board is
+also appended to the `dynasty_ranking_history` table under that date, one row
+per (date, source, player) with rank, positional rank, tier and value, for
+reading a player's trend; re-running on the same day replaces that day's rows
+rather than duplicating them. Any day can be put back on the live board with
+`uv run ffd import-rankings data/rankings/<date>`.
 
-| source | what it is | rows |
-|---|---|---|
-| `fantasypros` | FantasyPros dynasty consensus, with tiers and the expert spread | ~410 |
-| `fantasycalc` | FantasyCalc dynasty trade values | ~400 |
-| `thetradecalc` | TheTradeCalc startup board, priced for 12-team superflex PPR | ~600 |
-| `sleeper-adp` | where Sleeper drafters actually take him | ~280 |
+**One average of the four dynasty boards.** The dashboard's **Aggregate** tab
+is the mean of FantasyPros, FantasyCalc, TheTradeCalc and KTC, computed per
+request and never stored. Sleeper ADP is left out deliberately: it is what the
+room *did*, and folding an outcome into an average of opinions would
+double-count the very thing the rankings are read against. The redraft boards
+are left out too — they are their own tabs, and a dynasty tab never borrows a
+redraft value or tier for its detail columns.
 
-The dashboard's **Aggregate** tab is the mean of the first three, computed per
-request and never stored — an average of four snapshots taken on different days
-goes wrong quietly the moment one is re-imported. Sleeper ADP is left out of it
-deliberately: it is what the room *did*, and folding an outcome into an average
-of opinions would double-count the very thing the rankings are read against.
+*Failures.* A board that fails to fetch or parse — or comes back with fewer
+than 50 players, which means a truncated page or a changed format — is skipped
+and keeps yesterday's rows; the other boards still land, and the run exits 1
+so `systemctl --user status ffd-rankings` shows it failed.
 
-Each import replaces only its own source's rows, so refreshing one export
-leaves the other three untouched.
+*Hand imports.* `ffd import-rankings` still reads the four export formats
+(FantasyPros, FantasyCalc, TheTradeCalc, Sleeper ADP) from `data/`, and is the
+only way to load Sleeper ADP. Each import replaces only its own source's rows.
+Hand imports write no history, since a file imported today may say what a site
+said last month. Run `ffd sync-players` first — rankings are stored against
+Sleeper player ids.
 
 *Identification.* Files are recognised by their **header**, not their name, so
-a download that landed as `rankings (1).csv` still imports as what it is. A
-header matching none of the four fails loudly rather than importing as
+a download that landed as `rankings (1).csv` still imports as what it is; a
+snapshot names its board in its `source` column. A header matching none of them fails loudly rather than importing as
 something else — which is what you want both for a stray file in `data/` and
 for an export whose format has changed.
 
 *Matching.* Names are reconciled by a ladder — Sleeper id where the export
-carries one (FantasyCalc does, so it matches exactly), then name+position, then
+carries one (FantasyCalc and TheTradeCalc do; KTC's MFL id is translated
+through FantasyCalc's id map, so it nearly always does too), then name+position, then
 name alone (several sources file fullbacks as RB while Sleeper says FB), then
 last name+team, then last name+position. That last rung exists for the Sleeper
 ADP export, which has no team column at all; without it, five players are lost
@@ -178,10 +202,11 @@ to first-name nicknames — Cam Ward, Cam Skattebo, Kenny Gainwell, Chig Okonkwo
 Tank Dell. Ambiguity always loses: a rung finding two candidates falls through
 rather than guessing between two real players.
 
-*Misses are logged, not hidden.* Today: 3 of 413 on FantasyPros, 0 of 398 on
-FantasyCalc, 0 of 281 on Sleeper ADP, and 12 of 611 on TheTradeCalc — almost
-all of them undrafted rookies and deep free agents Sleeper's pool does not
-carry, plus one collision where two ranked players share a name.
+*Misses are logged, not hidden.* On the first fetch (2026-10-16): 2 of 404 on
+FantasyPros, 0 of 397 on FantasyCalc, 2 of 464 on KTC and 10 of 609 on
+TheTradeCalc — almost all of them undrafted rookies and deep free agents
+Sleeper's pool does not carry, plus one collision where two ranked players
+share a name.
 
 ## No kickers, no defenses
 

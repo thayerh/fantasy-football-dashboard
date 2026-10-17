@@ -1,0 +1,16 @@
+[Unit]
+Description=Fetch the ranking boards daily
+# The boards move once or twice a day at most; KTC and FantasyCalc recompute
+# from trades, FantasyPros when its experts re-rank.
+
+[Timer]
+# After ffd-players.timer has had its chance, so a rookie Sleeper added today
+# can match. Mid-morning, off the hour.
+OnCalendar=*-*-* 07:30
+RandomizedDelaySec=30min
+# Catch up after the desktop has been off; a missed day is a hole in history.
+Persistent=true
+Unit=ffd-rankings.service
+
+[Install]
+WantedBy=timers.target
