@@ -18,7 +18,11 @@ from app.db import Base
 config = context.config
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers defaults to True, which silences every logger
+    # already configured — including the app's own. That is invisible when
+    # alembic runs as its own process, but running it in-process (the schema
+    # drift test does) would leave the rest of the run logging nothing.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 settings = get_settings()
 settings.resolved_db_path.parent.mkdir(parents=True, exist_ok=True)

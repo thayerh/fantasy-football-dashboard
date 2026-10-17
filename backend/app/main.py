@@ -14,7 +14,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import draft, health, league
+from app.api import draft, health, league, rosters
 from app.config import get_settings
 
 log = logging.getLogger(__name__)
@@ -28,6 +28,7 @@ app = FastAPI(
 app.include_router(health.router)
 app.include_router(league.router)
 app.include_router(draft.router)
+app.include_router(rosters.router)
 
 
 @app.middleware("http")
@@ -68,6 +69,38 @@ def resolve_static_file(root: Path, full_path: str) -> Path | None:
     return candidate if candidate.is_file() else None
 
 
+# How long each kind of file may be reused without asking.
+#
+# The two are opposites on purpose, and getting either wrong is what makes a
+# deploy fail to reach anyone. Vite writes a content hash into every asset
+# filename, so `index-DXL7iEhr.js` can never change meaning — it is safe to
+# cache for a year and is replaced by being *renamed*. `index.html` is the one
+# file with a stable name, and it is the file that names the others, so it must
+# be revalidated on every load or a browser goes on requesting last week's
+# bundle by name.
+#
+# Without these headers there is no Cache-Control at all, and browsers fall
+# back to heuristic freshness — typically a tenth of the file's age — which
+# silently pins clients to a stale index.html for an unpredictable stretch.
+#
+# `no-cache` means "revalidate before reusing", not "never store". Starlette's
+# FileResponse sends an ETag but does not act on If-None-Match, so that
+# revalidation is a 200 with a body rather than a 304 — which costs nothing
+# here, because index.html is 725 bytes and the 259 KB bundle beside it is the
+# thing that stays cached for a year.
+IMMUTABLE = "public, max-age=31536000, immutable"
+REVALIDATE = "no-cache"
+
+
+class HashedAssets(StaticFiles):
+    """/assets, whose filenames carry a content hash and so never go stale."""
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = IMMUTABLE
+        return response
+
+
 def _mount_spa() -> None:
     """Serve the built frontend, if it has been built.
 
@@ -82,7 +115,7 @@ def _mount_spa() -> None:
 
     assets = static_dir / "assets"
     if assets.is_dir():
-        app.mount("/assets", StaticFiles(directory=assets), name="assets")
+        app.mount("/assets", HashedAssets(directory=assets), name="assets")
 
     root = static_dir.resolve()
 
@@ -90,8 +123,12 @@ def _mount_spa() -> None:
     async def spa(full_path: str) -> FileResponse:
         # Single-page app: unknown paths return index.html so client-side
         # routing works on a hard refresh. /api/* is already matched above.
+        #
+        # Everything reaching here revalidates, not only index.html: the rest
+        # is public/ — the favicon and the touch icon — whose names are fixed
+        # too, so they have the same staleness problem and the same cheap fix.
         candidate = resolve_static_file(root, full_path)
-        return FileResponse(candidate or index)
+        return FileResponse(candidate or index, headers={"Cache-Control": REVALIDATE})
 
 
 _mount_spa()

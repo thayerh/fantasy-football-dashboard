@@ -1,59 +1,55 @@
 import { useMemo, useState } from "react";
 
-import type { AvailableSort, Draft, Player } from "../api/client";
-import { signedGap } from "../format";
+import {
+  BOARDS,
+  CONSENSUS_BOARDS,
+  type Board,
+  type Draft,
+  type Player,
+} from "../api/client";
 import { useAvailable, useDraft } from "../queries";
-import { positionClass } from "./DraftBoard";
+import { boardRounds, positionClass } from "./DraftBoard";
 
 /**
  * Best available: the player pool minus everyone already drafted.
  *
- * Rankable two ways — by FantasyPros consensus or by Sleeper ADP — because
- * "best" has two defensible answers on draft night, and the gap between them is
- * the interesting part. Either ordering can be filtered by position.
+ * Five tabs, because in dynasty there is no single answer to "who is best".
+ * Three published boards disagree about it on purpose — they are pricing
+ * different things — the Sleeper market disagrees with all three, and the
+ * aggregate is the mean of the three that are opinions rather than outcomes.
  *
- * Whichever measure is doing the ordering leads the table; the other keeps its
- * column on the right. Both are always on screen, so the ECR column between
- * them can be checked against its own operands rather than taken on trust.
+ * **Every row shows every board whichever tab is active.** That is the page:
+ * the tab only decides the ordering, and the value is in reading across. A
+ * player the boards average 14th who Sleeper drafters take 40th is the actual
+ * find, and no single-number table can show him to you.
+ *
+ * Positions are filtered by lineup slot as well as by position, because FLEX
+ * and SUPERFLEX are what this league actually starts (§2.1) and "who can I put
+ * in my superflex" is the question being asked, not "who plays QB".
  *
  * Tell it which slot is yours and it rules the list where your turns are
- * projected to land, which is the question the list is really being read to
- * answer: not "who is best" but "who will still be here when it's my turn".
- *
- * Proj is the Vegas-derived season projection, the one column here that is a
- * quantity rather than a rank: the others say where a player sits in a queue,
- * this one says how far ahead of the next man he is.
- *
- * The overall list stops at 150. A position tab shows however many of that
- * position can be ranked the chosen way, which is always fewer.
+ * projected to land — not "who is best" but "who will still be here when it's
+ * my turn".
  */
-
-const FILTERS: (string | null)[] = [null, "QB", "RB", "WR", "TE", "K", "DEF"];
-
-/** The two defensible answers to "who is best available". */
-const SORTS: { value: AvailableSort; label: string; meta: string }[] = [
-  { value: "ecr", label: "FantasyPros", meta: "FantasyPros consensus" },
-  { value: "adp", label: "Sleeper ADP", meta: "Sleeper ADP" },
-];
 
 /**
- * The two measures the table shows, by name and by where to read them.
+ * The position filters, as lineup slots.
  *
- * `ecr_overall` rather than `ecr`: in a position-filtered view the latter is
- * the positional rank, which is already on screen in the Pos column and is not
- * comparable with an ADP.
+ * SUPERFLEX admits every position this league starts, so it returns what All
+ * does. It is here anyway and not as a duplicate: the label is the league's
+ * own slot, and reading it as "everyone is superflex-eligible" is a true and
+ * useful thing to notice about a format with no K and no DEF.
  */
-const MEASURES = {
-  ecr: { label: "FP ", of: (p: Player) => p.ecr_overall },
-  adp: { label: "ADP", of: (p: Player) => p.adp },
-} as const;
+const FILTERS: (string | null)[] = [null, "QB", "RB", "WR", "TE", "FLEX", "SUPERFLEX"];
 
-/** Whichever sort is active leads; the other trails. */
-function columns(sort: AvailableSort) {
-  return sort === "adp"
-    ? { lead: MEASURES.adp, trail: MEASURES.ecr }
-    : { lead: MEASURES.ecr, trail: MEASURES.adp };
-}
+/** The rank columns, in reading order: the average first, then its parts. */
+const RANK_COLUMNS: { board: Board; label: string; title: string }[] = [
+  { board: "aggregate", label: "AGG", title: "Average of the three dynasty boards" },
+  { board: "fantasypros", label: "FP", title: "FantasyPros dynasty consensus" },
+  { board: "fantasycalc", label: "FC", title: "FantasyCalc dynasty" },
+  { board: "thetradecalc", label: "TTC", title: "TheTradeCalc 12-team superflex PPR" },
+  { board: "sleeper-adp", label: "ADP", title: "Where Sleeper drafters actually take him" },
+];
 
 /** One of your turns: the round it falls in, and its overall pick number. */
 interface Turn {
@@ -79,7 +75,7 @@ interface Turn {
  */
 function turnsFor(draft: Draft, slot: number): Turn[] {
   const teams = draft.teams ?? 0;
-  const rounds = draft.rounds ?? 0;
+  const rounds = boardRounds(draft);
   if (!teams || !rounds || slot < 1 || slot > teams) return [];
 
   const snake = draft.type !== "linear";
@@ -121,6 +117,8 @@ function markersFor(players: Player[], turns: Turn[]): Map<string, Turn[]> {
 
 /** Remembered across reloads: you set your slot once, then draft for hours. */
 const SLOT_KEY = "ffd.draft-slot";
+/** Likewise the tab — an owner who trusts one board will want it every time. */
+const BOARD_KEY = "ffd.draft-board";
 
 function storedSlot(): number | null {
   try {
@@ -142,32 +140,70 @@ function rememberSlot(slot: number | null): void {
   }
 }
 
+function storedBoard(): Board {
+  try {
+    const raw = window.localStorage.getItem(BOARD_KEY);
+    // Validated against the list rather than cast: a board removed in a later
+    // release would otherwise come back out of storage and 422 every request.
+    const found = BOARDS.find((option) => option.value === raw);
+    return found ? found.value : "aggregate";
+  } catch {
+    return "aggregate";
+  }
+}
+
+function rememberBoard(board: Board): void {
+  try {
+    window.localStorage.setItem(BOARD_KEY, board);
+  } catch {
+    /* not remembering it is a smaller problem than not setting it */
+  }
+}
+
+/** A rank cell, or an em dash where that board has no opinion of him. */
+function Rank({ value, sorted }: { value: number | undefined; sorted: boolean }) {
+  return (
+    <td className={sorted ? "num is-sorted" : "num"}>
+      {value ?? <span className="pending">—</span>}
+    </td>
+  );
+}
+
 function PlayerRow({
   player,
-  sort,
+  board,
   turns,
 }: {
   player: Player;
-  sort: AvailableSort;
+  board: Board;
   turns?: Turn[];
 }) {
-  // Sleeper's market against FantasyPros' consensus, on the same convention as
-  // the board: negative means he goes *earlier* than the experts rank him.
-  //
-  // Always the *overall* rank. In a position-filtered view `player.ecr` is the
-  // positional one, and "an ADP of 22 minus QB1" is not a number that means
-  // anything.
-  const ecr = signedGap(player.adp, player.ecr_overall);
-  const { lead, trail } = columns(sort);
+  // The aggregate is not in `ranks` — it is computed per request, and it is a
+  // mean rather than a rank, so it rounds to one decimal rather than pretending
+  // to the precision of a whole placing.
+  const rankOf = (column: Board): number | undefined =>
+    column === "aggregate" ? undefined : player.ranks[column];
 
   return (
     <tr className={turns ? "is-my-pick" : undefined}>
-      <td className="num col-lead">
-        {lead.of(player) ?? <span className="pending">—</span>}
-      </td>
       <td>
         <span className="player-name">{player.full_name ?? player.player_id}</span>
-        {player.injury_status && <span className="tag tag--inline injury">{player.injury_status}</span>}
+        {/* A rookie, from Sleeper's own accrued-seasons count. In a startup
+            this is the whole incoming class on the same board as everyone
+            else, and it is the one thing about a player that a rank cannot
+            tell you: two players the boards agree on are not the same asset
+            when one of them has six more years of it left.
+
+            role="img" with a label, because a bare ★ is announced as "black
+            star" — which is the glyph, not the meaning. */}
+        {player.years_exp === 0 && (
+          <span className="rookie" role="img" aria-label="Rookie" title="Rookie">
+            ★
+          </span>
+        )}
+        {player.injury_status && (
+          <span className="tag tag--inline injury">{player.injury_status}</span>
+        )}
         {turns && (
           <span className="pick-note">
             {turns.length > 1 ? "Your picks" : "Your pick"}:{" "}
@@ -177,29 +213,50 @@ function PlayerRow({
       </td>
       <td>
         <span className={`pos-chip${positionClass(player.position)}`}>{player.position}</span>
-        {/* FantasyPros' published positional rank, not a recount of who is
-            left: it answers "how good is he", not "how many remain". */}
+        {/* The published positional rank, not a recount of who is left: it
+            answers "how good is he", not "how many remain". */}
         {player.pos_rank && <span className="pos-rank">{player.pos_rank}</span>}
       </td>
       <td className="num">{player.team ?? "FA"}</td>
-      <td className="num">{player.bye_week ?? <span className="pending">—</span>}</td>
-      <td className="num">{player.tier ?? <span className="pending">—</span>}</td>
-      <td className="num">
-        {player.vegas_points !== null ? (
-          <span title={`${player.vegas_points} projected points`}>
-            {Math.round(player.vegas_points)}
+      {/* The single most load-bearing number on a dynasty board, which is why
+          it sits with the player rather than off with the projections. */}
+      <td className="num col-age">
+        {player.ranked_age ?? player.age ?? <span className="pending">—</span>}
+      </td>
+
+      <td className={board === "aggregate" ? "num is-sorted" : "num"}>
+        {player.consensus !== null ? (
+          <span
+            title={`Mean of ${player.consensus_sources} of ${CONSENSUS_BOARDS.length} dynasty boards`}
+          >
+            {player.consensus}
+            {/* Ranked by fewer than all three: the mean is over a smaller and
+                more flattering sample, and the row says so rather than letting
+                a one-board favourite pass for a consensus pick. */}
+            {player.consensus_sources < CONSENSUS_BOARDS.length && (
+              <span className="of-sources">/{player.consensus_sources}</span>
+            )}
           </span>
         ) : (
           <span className="pending">—</span>
         )}
       </td>
-      <td className="num">
-        {trail.of(player) ?? <span className="pending">—</span>}
+      {RANK_COLUMNS.slice(1).map((column) => (
+        <Rank key={column.board} value={rankOf(column.board)} sorted={board === column.board} />
+      ))}
+
+      <td className="num col-tier">{player.tier ?? <span className="pending">—</span>}</td>
+      <td className="num col-value">
+        {player.value !== null ? (
+          Math.round(player.value).toLocaleString()
+        ) : (
+          <span className="pending">—</span>
+        )}
       </td>
-      <td className="num">
-        {ecr !== null ? (
-          <span title={`Sleeper ADP ${player.adp} against FantasyPros rank ${player.ecr_overall}`}>
-            {ecr}
+      <td className="num col-proj">
+        {player.vegas_points !== null ? (
+          <span title={`${player.vegas_points} projected points`}>
+            {Math.round(player.vegas_points)}
           </span>
         ) : (
           <span className="pending">—</span>
@@ -211,25 +268,26 @@ function PlayerRow({
 
 export function AvailablePlayers() {
   const [position, setPosition] = useState<string | null>(null);
-  const [sort, setSort] = useState<AvailableSort>("ecr");
+  const [board, setBoard] = useState<Board>(storedBoard);
   const [slot, setSlot] = useState<number | null>(storedSlot);
 
-  const available = useAvailable(position, sort);
+  const available = useAvailable(position, board);
   // The same cache entry the page's board already holds, so this costs no
   // extra request and the two never disagree about how many picks are in.
   const draft = useDraft();
 
-  const active = SORTS.find((s) => s.value === sort) ?? SORTS[0];
-  const { lead, trail } = columns(sort);
+  const active = BOARDS.find((option) => option.value === board) ?? BOARDS[0];
 
-  const board = draft.data;
+  const boardData = draft.data;
   // An auction has no pick order to project onto, and an unset draft order
   // leaves the slots unnamed but still numbered — that is enough.
-  const canProject = Boolean(board && board.type !== "auction" && board.teams && board.rounds);
+  const canProject = Boolean(
+    boardData && boardData.type !== "auction" && boardData.teams && boardData.rounds,
+  );
 
   const turns = useMemo(
-    () => (board && canProject && slot ? turnsFor(board, slot) : []),
-    [board, canProject, slot],
+    () => (boardData && canProject && slot ? turnsFor(boardData, slot) : []),
+    [boardData, canProject, slot],
   );
   const marks = useMemo(
     () => markersFor(available.data ?? [], turns),
@@ -240,6 +298,11 @@ export function AvailablePlayers() {
     const chosen = value === "" ? null : Number(value);
     setSlot(chosen);
     rememberSlot(chosen);
+  };
+
+  const chooseBoard = (value: Board) => {
+    setBoard(value);
+    rememberBoard(value);
   };
 
   return (
@@ -254,14 +317,14 @@ export function AvailablePlayers() {
       </div>
 
       <div className="filter-bar" role="group" aria-label="Rank by">
-        <span className="filter-label">Rank by</span>
-        {SORTS.map((option) => (
+        <span className="filter-label">Ranking</span>
+        {BOARDS.map((option) => (
           <button
             key={option.value}
             type="button"
-            className={option.value === sort ? "chip is-on" : "chip"}
-            aria-pressed={option.value === sort}
-            onClick={() => setSort(option.value)}
+            className={option.value === board ? "chip is-on" : "chip"}
+            aria-pressed={option.value === board}
+            onClick={() => chooseBoard(option.value)}
           >
             {option.label}
           </button>
@@ -283,7 +346,7 @@ export function AvailablePlayers() {
         ))}
       </div>
 
-      {canProject && board && (
+      {canProject && boardData && (
         <div className="filter-bar">
           <label className="filter-label" htmlFor="draft-slot">
             My slot
@@ -295,7 +358,7 @@ export function AvailablePlayers() {
             onChange={(event) => chooseSlot(event.target.value)}
           >
             <option value="">Not set</option>
-            {board.slots.map((entry) => (
+            {boardData.slots.map((entry) => (
               <option key={entry.slot} value={entry.slot}>
                 {entry.slot}. {entry.team_name || entry.display_name || "Unclaimed"}
               </option>
@@ -329,8 +392,8 @@ export function AvailablePlayers() {
           <h3>No players to rank</h3>
           <p>
             Nothing has been ingested yet. Run <code>ffd sync-players</code> on the host,
-            then <code>ffd sync-rankings</code> and <code>ffd sync-adp</code> — all three run
-            daily once their timers are enabled.
+            then <code>ffd import-rankings</code> to load the dynasty exports from{" "}
+            <code>data/</code>.
           </p>
         </div>
       ) : (
@@ -338,25 +401,37 @@ export function AvailablePlayers() {
           <table className="stat-table available-table">
             <thead>
               <tr>
-                {/* The active measure leads, so the column the list is sorted
-                    by is the first thing read. */}
-                <th className="num col-lead">{lead.label}</th>
                 <th>Player</th>
                 <th className="col-pos">Pos</th>
                 <th className="num col-team">Team</th>
-                <th className="num col-bye">Bye</th>
-                {/* FantasyPros' overall tier: where the consensus sees a real
+                <th className="num col-age" title="Age, as the ranking published it">
+                  Age
+                </th>
+                {/* Five boards, always all five. The sorted one is marked
+                    rather than moved: a column that jumps to the front when
+                    you select it makes the tabs harder to compare, which is
+                    the one thing this table exists to do. */}
+                {RANK_COLUMNS.map((column) => (
+                  <th
+                    key={column.board}
+                    className={board === column.board ? "num is-sorted" : "num"}
+                    title={column.title}
+                    aria-sort={board === column.board ? "ascending" : undefined}
+                  >
+                    {column.label}
+                  </th>
+                ))}
+                {/* FantasyPros' tier: where the consensus sees a real
                     drop-off, which is the cue for trading down. */}
                 <th className="num col-tier">Tier</th>
-                {/* Beside Tier rather than beside the market columns: both
-                    answer "how good is he", where ADP and ECR answer "what
-                    will the room do about it". */}
+                {/* Trade value on the active board's scale where it has one.
+                    A rank says who is better; this says by how much, which is
+                    what a trade is actually priced on. */}
+                <th className="num col-value">Value</th>
+                {/* The one column that is a quantity rather than a placing:
+                    Vegas-derived points for *this* season, which is the thing
+                    every dynasty board deliberately looks past. */}
                 <th className="num col-proj">Proj</th>
-                <th className="num col-adp">{trail.label}</th>
-                {/* Not FantasyPros' rank itself — the gap between the Sleeper
-                    market and that rank. Negative means the room drafts him
-                    ahead of where the experts have him. */}
-                <th className="num col-ecr">ECR</th>
               </tr>
             </thead>
             <tbody>
@@ -364,7 +439,7 @@ export function AvailablePlayers() {
                 <PlayerRow
                   key={player.player_id}
                   player={player}
-                  sort={sort}
+                  board={board}
                   turns={marks.get(player.player_id)}
                 />
               ))}
@@ -375,13 +450,18 @@ export function AvailablePlayers() {
 
       <div className="panel-foot">
         <p className="note">
-          Both orderings refresh daily: FantasyPros ranks about 515 players, of whom
-          about 270 carry a Sleeper ADP &mdash; so the ADP list is the shorter of the two.
-          ECR is the Sleeper market against the consensus under either:{" "}
-          <strong>negative means the room drafts him ahead of where the experts rank
-          him</strong>, positive means he is still there later than they say he should be.
-          Drafted players drop off within twenty seconds of the pick, and the rules
-          marking your turns move up the list with them.
+          <strong>AGG</strong> is the mean of FantasyPros, FantasyCalc and TheTradeCalc;
+          Sleeper ADP is left out of it deliberately, since it is what the room
+          <em> did</em> rather than what anyone thinks. A <code>/2</code> beside an
+          aggregate means only two of the three ranked him, so it is the more
+          flattering average of a smaller sample. The gap between{" "}
+          <strong>AGG</strong> and <strong>ADP</strong> is where a startup is won: a
+          player the boards rate well above where Sleeper takes him is the one to wait
+          on. <span className="rookie" aria-hidden>★</span> marks a rookie — Sleeper
+          has no accrued season for him, so in this startup that is the whole
+          incoming class. Boards are imported by hand with{" "}
+          <code>ffd import-rankings</code>, so they change only when you refresh the
+          exports.
         </p>
       </div>
     </section>

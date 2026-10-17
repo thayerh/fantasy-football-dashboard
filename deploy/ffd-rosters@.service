@@ -1,0 +1,20 @@
+[Unit]
+Description=Refresh NFL active-roster history from nflverse
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/devcode/fantasy/fantasy-football-dashboard
+# Only the current season, deliberately. The ten-season backfill is a one-time
+# ~150 MB download run by hand; past seasons are finished and re-downloading
+# them weekly would move 150 MB to change nothing. To pick up an nflverse
+# correction to an old season, run that season by hand:
+#
+#   uv run ffd sync-nfl-rosters --seasons 2021
+#
+ExecStart=/usr/bin/env uv run ffd sync-nfl-rosters --seasons %i
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=default.target

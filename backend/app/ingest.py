@@ -12,25 +12,28 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import re
-from collections.abc import Callable
 from typing import Any, NamedTuple
 
-from sqlalchemy import delete, func, select, true
+from sqlalchemy import delete, func, select, true, update
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session
 
 from app.db import utcnow
-from app.fantasypros import RANKED_POSITIONS, FantasyProsClient
+from app.dynasty import ALL_SOURCES
 from app.models import (
     Draft,
     DraftPick,
+    DynastyRanking,
     League,
     LeagueUser,
+    NflPlayer,
+    NflStint,
     Player,
-    PlayerAdp,
     PlayerProjection,
-    PlayerRanking,
+    Roster,
+    TradedPick,
 )
+from app.nflverse import NflverseClient, active_rows, franchise_of
 from app.sleeper import SleeperClient, ms_to_utc
 
 log = logging.getLogger(__name__)
@@ -104,6 +107,139 @@ def sync_users(session: Session, client: SleeperClient, league_id: str) -> int:
         written += 1
 
     log.info("Synced %d users for league %s", written, league_id)
+    return written
+
+
+def _points(settings: dict[str, Any], whole: str, decimal: str) -> float | None:
+    """Recombine Sleeper's split point totals into one number.
+
+    Points arrive as two integers — 1234 and 56 mean 1234.56 — and either half
+    can be missing. Absent entirely (the whole preseason, before a game is
+    played) is None rather than 0.0: nobody has scored nothing yet, they simply
+    have not played.
+    """
+    if settings.get(whole) is None and settings.get(decimal) is None:
+        return None
+    return float(settings.get(whole) or 0) + float(settings.get(decimal) or 0) / 100
+
+
+def sync_rosters(session: Session, client: SleeperClient, league_id: str) -> int:
+    """Upsert every team in the league. Returns rows written.
+
+    One request for all twelve, so it belongs on the ordinary `ffd sync`
+    cadence rather than a timer of its own. Rosters change on waivers and
+    trades — daily in season, and the whole endpoint is a few kilobytes.
+    """
+    payload: list[dict[str, Any]] = client.get_league_rosters(league_id)
+    now = utcnow()
+    written = 0
+
+    for roster in payload:
+        settings = roster.get("settings") or {}
+        values = {
+            "league_id": league_id,
+            "roster_id": roster["roster_id"],
+            "owner_id": roster.get("owner_id"),
+            "co_owners": roster.get("co_owners"),
+            "players": roster.get("players"),
+            # Positional, and stored unsorted for that reason — see the model.
+            "starters": roster.get("starters"),
+            "taxi": roster.get("taxi"),
+            "reserve": roster.get("reserve"),
+            "wins": settings.get("wins") or 0,
+            "losses": settings.get("losses") or 0,
+            "ties": settings.get("ties") or 0,
+            "fpts": _points(settings, "fpts", "fpts_decimal"),
+            "fpts_against": _points(settings, "fpts_against", "fpts_against_decimal"),
+            "waiver_budget_used": settings.get("waiver_budget_used"),
+            "waiver_position": settings.get("waiver_position"),
+            "total_moves": settings.get("total_moves"),
+            "raw": roster,
+            "fetched_at": now,
+        }
+
+        stmt = insert(Roster).values(**values)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[Roster.league_id, Roster.roster_id],
+            set_={k: v for k, v in values.items() if k not in ("league_id", "roster_id")},
+        )
+        session.execute(stmt)
+        written += 1
+
+    # A team that Sleeper no longer reports has been removed from the league,
+    # and leaving it would put a phantom in the switcher. Safe because the
+    # fetch either returns the whole league or raises.
+    kept = {roster["roster_id"] for roster in payload}
+    if kept:
+        removed = session.execute(
+            delete(Roster).where(
+                Roster.league_id == league_id, Roster.roster_id.notin_(kept)
+            )
+        ).rowcount
+        if removed:
+            log.info("Removed %d roster(s) no longer in league %s", removed, league_id)
+
+    log.info("Synced %d rosters for league %s", written, league_id)
+    return written
+
+
+def sync_traded_picks(session: Session, client: SleeperClient, league_id: str) -> int:
+    """Upsert the future-pick ledger. Returns rows written.
+
+    A short list — only picks that have actually moved — and it rides along
+    with the rosters for the same reason: one small request, and a trade
+    changes both at once.
+
+    Unlike every other sync here, an *empty* response is meaningful. A pick
+    trade can be reversed by the commissioner (`rulebook/08-trades.md` §8.5),
+    and the pick then vanishes from this endpoint rather than coming back with
+    its original owner. So rows Sleeper no longer reports are deleted, empty
+    list included — otherwise a reversed trade would be permanent here.
+    """
+    payload: list[dict[str, Any]] = client.get_traded_picks(league_id)
+    now = utcnow()
+    written = 0
+
+    for pick in payload:
+        values = {
+            "league_id": league_id,
+            "season": str(pick["season"]),
+            "round": pick["round"],
+            "roster_id": pick["roster_id"],
+            "owner_id": pick.get("owner_id"),
+            "previous_owner_id": pick.get("previous_owner_id"),
+            "raw": pick,
+            "fetched_at": now,
+        }
+        stmt = insert(TradedPick).values(**values)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[
+                TradedPick.league_id,
+                TradedPick.season,
+                TradedPick.round,
+                TradedPick.roster_id,
+            ],
+            set_={
+                k: v
+                for k, v in values.items()
+                if k not in ("league_id", "season", "round", "roster_id")
+            },
+        )
+        session.execute(stmt)
+        written += 1
+
+    kept = {(str(pick["season"]), pick["round"], pick["roster_id"]) for pick in payload}
+    removed = 0
+    for stored in session.scalars(
+        select(TradedPick).where(TradedPick.league_id == league_id)
+    ).all():
+        if (stored.season, stored.round, stored.roster_id) not in kept:
+            session.delete(stored)
+            removed += 1
+    if removed:
+        log.info("Removed %d reverted pick trade(s) in league %s", removed, league_id)
+
+    log.info("Synced %d traded picks for league %s", written, league_id)
     return written
 
 
@@ -247,7 +383,12 @@ def sync_draft(session: Session, client: SleeperClient, league_id: str) -> int:
 
 # Positions the dashboard cares about. Sleeper's pool includes long snappers,
 # practice-squad linemen and retired players; none belong in "best available".
-FANTASY_POSITIONS = frozenset({"QB", "RB", "WR", "TE", "K", "DEF"})
+#
+# No K and no DEF: this league starts neither, so a kicker in the pool is a
+# row that can only ever be a wrong suggestion. The filter is the guard that
+# keeps them out — the migration cleared the ones already stored, but this is
+# what stops the next `ffd sync-players` putting them straight back.
+FANTASY_POSITIONS = frozenset({"QB", "RB", "WR", "TE"})
 
 # search_rank is 9999999 for players Sleeper doesn't rank. Anything past this is
 # noise, and keeping it would push 10,000 irrelevant rows into the table.
@@ -273,16 +414,12 @@ def sync_players(session: Session, client: SleeperClient) -> int:
             continue
 
         rank = player.get("search_rank")
-        # Team defenses have no rank at all but are draftable, so they are kept
-        # and sorted last rather than filtered out with the noise.
-        is_def = player.get("position") == "DEF"
-        if not is_def and (not isinstance(rank, int) or rank >= RANK_CEILING):
+        if not isinstance(rank, int) or rank >= RANK_CEILING:
             continue
 
         rows.append(
             {
                 "player_id": player["player_id"],
-                # Team defenses carry no full_name; last_name is "Texans".
                 "full_name": player.get("full_name") or player.get("last_name"),
                 "first_name": player.get("first_name"),
                 "last_name": player.get("last_name"),
@@ -293,9 +430,9 @@ def sync_players(session: Session, client: SleeperClient) -> int:
                 "years_exp": player.get("years_exp"),
                 "age": player.get("age"),
                 "search_rank": rank if isinstance(rank, int) and rank < RANK_CEILING else None,
-                # The join key to FantasyPros; str because their side is a
-                # string and SQLite would happily compare 32711 to "32711" as
-                # unequal.
+                # A cross-reference kept for joining to sources that carry it;
+                # str because their side is a string and SQLite would happily
+                # compare 32711 to "32711" as unequal.
                 "yahoo_id": str(player["yahoo_id"]) if player.get("yahoo_id") else None,
                 "fantasy_positions": sorted(positions),
                 "fetched_at": now,
@@ -310,17 +447,13 @@ def sync_players(session: Session, client: SleeperClient) -> int:
     return len(rows)
 
 
-# FantasyPros calls team defenses DST; Sleeper calls them DEF.
-_FP_TO_SLEEPER_POSITION = {"DST": "DEF"}
-
-# Team abbreviations that differ between the two. Jacksonville is the one that
-# actually bit: FantasyPros says JAC, Sleeper says JAX, and a defense resolved
-# by team abbreviation silently became a row pointing at no player at all.
+# Team abbreviations that differ between the ranking sources and Sleeper.
+# Jacksonville is the one that actually bit: FantasyPros says JAC, Sleeper says
+# JAX, and a row resolved by team abbreviation silently pointed at no player.
 _TEAM_ALIASES = {"JAC": "JAX", "WSH": "WAS", "LA": "LAR", "ARZ": "ARI"}
 
 _NAME_NOISE = re.compile(r"[^a-z ]")
 _NAME_SUFFIX = re.compile(r"\b(jr|sr|ii|iii|iv|v)\b")
-_POS_RANK = re.compile(r"(\d+)$")
 
 
 def _normalize_name(name: str | None) -> str:
@@ -332,29 +465,11 @@ def _normalize_name(name: str | None) -> str:
     return " ".join(cleaned.split())
 
 
-def _number(entry: dict[str, Any], key: str, cast: Callable[[Any], Any]) -> Any:
-    """FantasyPros sends its numbers as strings, and sometimes as ""."""
-    value = entry.get(key)
-    if value in (None, ""):
-        return None
-    try:
-        return cast(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def _positional_rank(pos_rank: str | None) -> int | None:
-    """'WR12' -> 12. The cheat sheet gives the positional rank as a label."""
-    if not pos_rank:
-        return None
-    match = _POS_RANK.search(pos_rank)
-    return int(match.group(1)) if match else None
-
-
 class _PlayerIndex(NamedTuple):
     by_name_position: dict[tuple[str, str], str]
     by_name: dict[str, list[str]]
     by_last_team_position: dict[tuple[str, str, str], list[str]]
+    by_last_position: dict[tuple[str, str], list[str]]
     valid: set[str]
 
 
@@ -368,6 +483,7 @@ def _match_index(session: Session) -> _PlayerIndex:
     by_name_position: dict[tuple[str, str], str] = {}
     by_name: dict[str, list[str]] = {}
     by_last_team_position: dict[tuple[str, str, str], list[str]] = {}
+    by_last_position: dict[tuple[str, str], list[str]] = {}
     valid: set[str] = set()
 
     for player in session.scalars(select(Player)).all():
@@ -381,32 +497,42 @@ def _match_index(session: Session) -> _PlayerIndex:
         if last:
             key = (last, player.team or "", position)
             by_last_team_position.setdefault(key, []).append(player.player_id)
+            by_last_position.setdefault((last, position), []).append(player.player_id)
 
-    return _PlayerIndex(by_name_position, by_name, by_last_team_position, valid)
+    return _PlayerIndex(
+        by_name_position, by_name, by_last_team_position, by_last_position, valid
+    )
 
 
 def _resolve_player(entry: dict[str, Any], index: _PlayerIndex) -> str | None:
-    """Find the Sleeper player_id for a FantasyPros ranking entry.
+    """Find the Sleeper player_id for a ranking or projection entry.
 
-    A ladder, because the two databases disagree in three specific ways and
-    each rung fixes one. Measured against the full 517-player cheat sheet:
-    475 by name and position, 7 by name alone (FantasyPros files fullbacks as
-    RB while Sleeper calls them FB), 2 by last name and team (nicknames —
-    "Hollywood Brown" is Sleeper's "Marquise Brown"), 32 defenses by team.
-    One free agent went unmatched.
+    A ladder, because the outside sources and Sleeper disagree in specific
+    ways and each rung fixes one: most rows match on name and position, a few
+    on name alone (several sources file fullbacks as RB while Sleeper calls
+    them FB), and the rest on a last name, which is what catches the nicknames
+    — "Hollywood Brown" is Sleeper's "Marquise Brown".
+
+    Above all of it sits `sleeper_id`, which is not a guess at all. Only
+    FantasyCalc carries one, and where it does the ladder is skipped entirely.
+
+    The last-name rungs are tried with the team first and then without it,
+    because one source cannot supply a team at all: the Sleeper ADP export is
+    three columns and none of them is the NFL club. Dropping to last name and
+    position alone recovers the five players it otherwise loses, every one of
+    them a first-name nickname Sleeper disagrees about — Cam Ward, Cam
+    Skattebo, Kenny Gainwell, Chig Okonkwo, Tank Dell.
 
     Ambiguity always loses: a rung that finds two candidates falls through
-    rather than guessing between two real players.
+    rather than guessing between two real players. That is what makes the
+    weakest rung safe — two WRs named Brown are simply left unmatched.
     """
-    position = entry.get("player_position_id") or ""
-    position = _FP_TO_SLEEPER_POSITION.get(position, position)
+    # The exact answer, where a source happens to know it.
+    sleeper_id = entry.get("sleeper_id")
+    if sleeper_id:
+        return sleeper_id if sleeper_id in index.valid else None
 
-    # Team defenses: Sleeper's player_id for a defense IS the team abbreviation,
-    # and the names never match ("Texans" vs "Houston Texans").
-    if position == "DEF":
-        team = entry.get("player_team_id") or ""
-        team = _TEAM_ALIASES.get(team, team)
-        return team if team in index.valid else None
+    position = entry.get("player_position_id") or ""
 
     name = _normalize_name(entry.get("player_name"))
     if (name, position) in index.by_name_position:
@@ -417,299 +543,92 @@ def _resolve_player(entry: dict[str, Any], index: _PlayerIndex) -> str | None:
         return unique[0]
 
     last = _normalize_name((entry.get("player_name") or "").split(" ")[-1])
-    key = (last, entry.get("player_team_id") or "", position)
+    team = entry.get("player_team_id") or ""
+    key = (last, _TEAM_ALIASES.get(team, team), position)
     candidates = index.by_last_team_position.get(key, [])
+    if len(candidates) == 1:
+        return candidates[0]
+
+    candidates = index.by_last_position.get((last, position), [])
     if len(candidates) == 1:
         return candidates[0]
 
     return None
 
 
-def _absorb(
-    rows: dict[str, dict[str, Any]],
-    payload: dict[str, Any],
-    index: _PlayerIndex,
-    unmatched: list[str],
-    *,
-    overall: bool,
-    source: str,
-    now: dt.datetime,
-) -> None:
-    """Fold one ranking payload into the rows to be written."""
-    published = ms_to_utc((payload.get("last_updated_ts") or 0) * 1000) or None
+def sync_dynasty_rankings(session: Session, source: str, rows: list[dict[str, Any]]) -> int:
+    """Replace one source's board with a parsed export. Returns rows written.
 
-    for entry in payload.get("players") or []:
+    Only that source's rows are touched. Each export is downloaded and imported
+    by hand at its own moment, and a re-import of one board must not disturb
+    the other three — which is exactly what the composite key buys and what the
+    old one-table-per-feed shape could not do.
+
+    The parser hands back entries shaped like the other importers', so this
+    reuses the same match ladder rather than growing a fourth one.
+    """
+    if source not in ALL_SOURCES:
+        raise ValueError(f"Unknown ranking source {source!r}; expected one of {ALL_SOURCES}.")
+
+    index = _match_index(session)
+    if not index.valid:
+        raise RuntimeError("Player pool is empty. Run `ffd sync-players` before importing.")
+
+    now = utcnow()
+    matched: dict[str, dict[str, Any]] = {}
+    unmatched: list[str] = []
+
+    for entry in rows:
         player_id = _resolve_player(entry, index)
         if player_id is None:
             unmatched.append(f"{entry.get('player_name')} ({entry.get('player_position_id')})")
             continue
 
-        # Two FantasyPros players can resolve to one Sleeper player — there are
-        # two WRs named Isaiah Williams in the 2026 set and Sleeper lists one.
-        # Payloads arrive rank-ordered, so the first is the better-ranked; keep
-        # it, and say so rather than letting the second silently vanish.
-        existing = rows.get(player_id)
-        fp_id = str(entry.get("player_id") or "") or None
-        if existing is not None and existing["fp_player_id"] not in (None, fp_id):
-            log.warning(
-                "Two ranked players resolve to Sleeper %s: keeping %s (ECR %s), dropping %s "
-                "(ECR %s)",
-                player_id, existing["fp_name"], existing["ecr_overall"],
-                entry.get("player_name"), entry.get("rank_ecr"),
-            )
-            continue
-
-        row = rows.setdefault(
-            player_id,
-            {
-                "player_id": player_id,
-                "ecr_overall": None,
-                "ecr_position": None,
-                "pos_rank": None,
-                "tier": None,
-                "bye_week": None,
-                "rank_min": None,
-                "rank_max": None,
-                "rank_ave": None,
-                "rank_std": None,
-                "source": source,
-                "scoring": payload.get("scoring"),
-                "ranking_type": payload.get("ranking_type_name"),
-                "experts": payload.get("total_experts"),
-                "fp_player_id": str(entry.get("player_id") or "") or None,
-                "fp_name": entry.get("player_name"),
-                "published_at": published,
-                "fetched_at": now,
-            },
-        )
-
-        rank = entry.get("rank_ecr")
-        if overall:
-            row["ecr_overall"] = rank
-            # The cheat sheet labels the positional rank rather than giving a
-            # second ranking call, so both ranks come out of one payload.
-            row["ecr_position"] = row["ecr_position"] or _positional_rank(entry.get("pos_rank"))
-        else:
-            row["ecr_position"] = rank
-
-        row["pos_rank"] = row["pos_rank"] or entry.get("pos_rank")
-        row["tier"] = row["tier"] if row["tier"] is not None else entry.get("tier")
-
-        bye = entry.get("player_bye_week")
-        if row["bye_week"] is None and str(bye or "").isdigit():
-            row["bye_week"] = int(bye)
-
-        for field, cast in (("rank_min", int), ("rank_max", int),
-                            ("rank_ave", float), ("rank_std", float)):
-            if row[field] is None:
-                row[field] = _number(entry, field, cast)
-
-
-def _write_rankings(
-    session: Session,
-    rows: dict[str, dict[str, Any]],
-    unmatched: list[str],
-    source: str,
-) -> int:
-    """Replace the table. The newest fetch is the truth; there is no merge."""
-    session.execute(delete(PlayerRanking))
-    if rows:
-        session.execute(insert(PlayerRanking), list(rows.values()))
-
-    if unmatched:
-        # Not an error: a ranked free agent can be absent from Sleeper's pool.
-        log.warning(
-            "No Sleeper match for %d ranked player(s): %s",
-            len(unmatched),
-            ", ".join(unmatched[:10]),
-        )
-    log.info("Stored %d ranked players from %s", len(rows), source)
-    return len(rows)
-
-
-def sync_rankings_web(session: Session, payload: dict[str, Any]) -> int:
-    """Replace rankings from the cheat sheet. Returns rows written.
-
-    The whole ranking set arrives in one payload — overall ECR, positional
-    rank, tier, bye and the expert spread — so this costs one HTTP request and
-    none of the JSON API's fifty-a-day budget.
-    """
-    index = _match_index(session)
-    if not index.valid:
-        raise RuntimeError("Player pool is empty. Run `ffd sync-players` before sync-rankings.")
-
-    rows: dict[str, dict[str, Any]] = {}
-    unmatched: list[str] = []
-    _absorb(rows, payload, index, unmatched, overall=True, source="web", now=utcnow())
-    return _write_rankings(session, rows, unmatched, "web")
-
-
-def sync_rankings_api(session: Session, client: FantasyProsClient, season: str) -> int:
-    """Replace rankings from the JSON API. Returns rows written.
-
-    The fallback for when the cheat sheet's shape changes. Costs **seven** calls
-    of the fifty-a-day budget: the free tier caps every response at ten players
-    and ignores a client-supplied limit, so the position filter is the only
-    lever on which ten come back — one call for the overall top ten, one for
-    each of six positions.
-    """
-    index = _match_index(session)
-    if not index.valid:
-        raise RuntimeError("Player pool is empty. Run `ffd sync-players` before sync-rankings.")
-
-    now = utcnow()
-    rows: dict[str, dict[str, Any]] = {}
-    unmatched: list[str] = []
-
-    _absorb(rows, client.get_consensus_rankings(season, position="ALL"), index, unmatched,
-            overall=True, source="api", now=now)
-    for position in RANKED_POSITIONS:
-        _absorb(rows, client.get_consensus_rankings(season, position=position), index, unmatched,
-                overall=False, source="api", now=now)
-
-    written = _write_rankings(session, rows, unmatched, "api")
-    log.info("Used %d FantasyPros API calls", client.calls)
-    return written
-
-
-def sync_adp(session: Session, client: FantasyProsClient, season: str) -> int:
-    """Replace average draft position. Returns rows written.
-
-    Costs **seven** calls of the fifty-a-day budget, for the same reason the
-    API ranking path does: ten players per response, and the position filter is
-    the only lever on which ten.
-
-    This is FantasyPros' cross-platform ADP, not Sleeper's alone — see
-    PlayerAdp. `rank_ave` is the actual average draft position and `rank_ecr`
-    its ordinal; both are kept, because "went at 5.6 on average" and "was the
-    5th player off the board" answer different questions.
-    """
-    index = _match_index(session)
-    if not index.valid:
-        raise RuntimeError("Player pool is empty. Run `ffd sync-players` before sync-adp.")
-
-    now = utcnow()
-    rows: dict[str, dict[str, Any]] = {}
-    unmatched: list[str] = []
-
-    def absorb(payload: dict[str, Any]) -> None:
-        published = ms_to_utc((payload.get("last_updated_ts") or 0) * 1000) or None
-        for entry in payload.get("players") or []:
-            player_id = _resolve_player(entry, index)
-            if player_id is None:
-                unmatched.append(f"{entry.get('player_name')} ({entry.get('player_position_id')})")
-                continue
-            if player_id in rows:
-                continue  # already seen in the overall call
-
-            rows[player_id] = {
-                "player_id": player_id,
-                "adp": _number(entry, "rank_ave", float),
-                "adp_rank": entry.get("rank_ecr"),
-                "adp_min": _number(entry, "rank_min", int),
-                "adp_max": _number(entry, "rank_max", int),
-                "adp_std": _number(entry, "rank_std", float),
-                "scoring": payload.get("scoring"),
-                "sources": payload.get("total_experts"),
-                "source": "fp-api",
-                "fp_player_id": str(entry.get("player_id") or "") or None,
-                "fp_name": entry.get("player_name"),
-                "published_at": published,
-                "fetched_at": now,
-            }
-
-    absorb(client.get_consensus_rankings(season, position="ALL", ranking_type="ADP"))
-    for position in RANKED_POSITIONS:
-        absorb(client.get_consensus_rankings(season, position=position, ranking_type="ADP"))
-
-    session.execute(delete(PlayerAdp))
-    if rows:
-        session.execute(insert(PlayerAdp), list(rows.values()))
-
-    if unmatched:
-        log.warning("No Sleeper match for %d ADP entries: %s", len(unmatched),
-                    ", ".join(unmatched[:10]))
-    log.info("Stored ADP for %d players in %d API calls", len(rows), client.calls)
-    return len(rows)
-
-
-def sync_sleeper_adp(session: Session, entries: list[dict[str, Any]], scoring: str) -> int:
-    """Replace ADP with Sleeper's own, scraped from the rendered page.
-
-    Returns rows written. Costs none of the fifty-a-day API budget.
-
-    The entries arrive shaped like FantasyPros' JSON rows, so this reuses the
-    same match ladder as the ranking syncs rather than growing a second one.
-
-    Unlike the API path there is no expert spread to record: this is one
-    platform's average, not a consensus of several, so `adp_min`, `adp_max` and
-    `adp_std` stay null and `sources` is 1. `adp_rank` is derived here — the
-    page's own RK column is FantasyPros' overall rank, which is a different
-    ordering than the Sleeper column and would be misleading stored beside it.
-    """
-    index = _match_index(session)
-    if not index.valid:
-        raise RuntimeError("Player pool is empty. Run `ffd sync-players` before sync-adp.")
-
-    now = utcnow()
-    rows: dict[str, dict[str, Any]] = {}
-    unmatched: list[str] = []
-
-    for entry in entries:
-        adp = entry.get("sleeper_adp")
-        if adp is None:
-            continue
-
-        player_id = _resolve_player(entry, index)
-        if player_id is None:
-            unmatched.append(f"{entry.get('player_name')} ({entry.get('player_position_id')})")
-            continue
-
-        # Two scraped rows can resolve to one Sleeper player, the same way two
-        # ranked ones can. The earlier ADP is the one the league will see him
-        # go at, so the lower number wins rather than the later row.
-        existing = rows.get(player_id)
+        # Two export rows can resolve to one Sleeper player — two players share
+        # a name and Sleeper lists one of them. Rows arrive rank-ordered, so
+        # the first is the better-ranked; keep it, and say so rather than
+        # letting the second silently overwrite it.
+        existing = matched.get(player_id)
         if existing is not None:
-            if existing["adp"] <= adp:
-                continue
             log.warning(
-                "Two ADP rows resolve to Sleeper %s: keeping %s (%s), dropping %s (%s)",
-                player_id, entry.get("player_name"), adp, existing["fp_name"], existing["adp"],
+                "Two %s rows resolve to Sleeper %s: keeping %s (#%s), dropping %s (#%s)",
+                source, player_id, existing["source_name"], existing["overall_rank"],
+                entry.get("player_name"), entry.get("overall_rank"),
             )
+            continue
 
-        rows[player_id] = {
+        matched[player_id] = {
+            "source": source,
             "player_id": player_id,
-            "adp": float(adp),
-            "adp_rank": None,
-            "adp_min": None,
-            "adp_max": None,
-            "adp_std": None,
-            "scoring": scoring,
-            "sources": 1,
-            "source": "sleeper-web",
-            "fp_player_id": None,
-            "fp_name": entry.get("player_name"),
-            "published_at": None,
+            "overall_rank": entry["overall_rank"],
+            "position_rank": entry.get("position_rank"),
+            "pos_rank": entry.get("pos_rank"),
+            "tier": entry.get("tier"),
+            "value": entry.get("value"),
+            "age": entry.get("age"),
+            "rank_min": entry.get("rank_min"),
+            "rank_max": entry.get("rank_max"),
+            "rank_ave": entry.get("rank_ave"),
+            "rank_std": entry.get("rank_std"),
+            "source_name": entry.get("player_name"),
             "fetched_at": now,
         }
 
-    # The ordinal, assigned after matching so it counts only players we can
-    # actually join to. Ties keep their relative order and share no rank.
-    for ordinal, row in enumerate(sorted(rows.values(), key=lambda r: r["adp"]), start=1):
-        row["adp_rank"] = ordinal
-
-    session.execute(delete(PlayerAdp))
-    if rows:
-        session.execute(insert(PlayerAdp), list(rows.values()))
+    session.execute(delete(DynastyRanking).where(DynastyRanking.source == source))
+    if matched:
+        session.execute(insert(DynastyRanking), list(matched.values()))
 
     if unmatched:
-        # Not an error: the page ranks free agents Sleeper's pool may not carry.
+        # Not an error: every one of these boards ranks rookies and free agents
+        # ahead of Sleeper adding them, and rates players this league's pool
+        # filter has already dropped.
         log.warning(
-            "No Sleeper match for %d ADP entries: %s",
-            len(unmatched), ", ".join(unmatched[:10]),
+            "No Sleeper match for %d %s entr%s: %s",
+            len(unmatched), source, "y" if len(unmatched) == 1 else "ies",
+            ", ".join(unmatched[:10]),
         )
-    log.info("Stored Sleeper ADP for %d players", len(rows))
-    return len(rows)
+    log.info("Stored %d ranked players from %s", len(matched), source)
+    return len(matched)
 
 
 def sync_vegas_projections(session: Session, rows: list[dict[str, Any]]) -> int:
@@ -771,3 +690,189 @@ def sync_vegas_projections(session: Session, rows: list[dict[str, Any]]) -> int:
         )
     log.info("Stored Vegas projections for %d players", len(matched))
     return len(matched)
+
+
+# --- nflverse historical rosters -------------------------------------------
+#
+# Not a Sleeper sync, but the same fetch -> upsert shape, and it shares
+# _normalize_name with the FantasyPros matchers: a submitted name has to be
+# normalised the same way whichever table it is looked up in.
+
+
+def _int_or_none(value: str | None) -> int | None:
+    """nflverse writes absent numbers as an empty field, not a zero."""
+    if not value:
+        return None
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def sync_nfl_rosters(
+    session: Session,
+    client: NflverseClient,
+    seasons: list[int],
+) -> int:
+    """Load active-roster history for the given seasons. Returns stints written.
+
+    Seasons are processed in ascending order and each one replaces its own rows
+    outright, so re-running a season picks up nflverse's own corrections and
+    re-running the whole window is idempotent. A season's rows are deleted only
+    once its file has downloaded and parsed, so a mid-backfill network failure
+    leaves the previous data in place rather than a hole.
+    """
+    total = 0
+    for season in sorted(seasons):
+        total += _absorb_season(session, client, season)
+
+    _refresh_player_spans(session)
+    return total
+
+
+def _absorb_season(session: Session, client: NflverseClient, season: int) -> int:
+    """Fetch one season, collapse its weekly rows to stints, and store them."""
+    text = client.fetch_season(season)
+    now = utcnow()
+
+    # (gsis_id, franchise) -> stint under construction. The week range is built
+    # by min/max rather than assuming the file is ordered.
+    stints: dict[tuple[str, str], dict[str, Any]] = {}
+    # gsis_id -> the row from that player's latest week, which is the most
+    # current spelling of his name and position within this season.
+    latest: dict[str, tuple[int, dict[str, Any]]] = {}
+    unknown_teams: set[str] = set()
+
+    for row in active_rows(text):
+        gsis_id = row["gsis_id"]
+        franchise = franchise_of(row.get("team"))
+        if franchise is None:
+            unknown_teams.add(row.get("team") or "")
+            continue
+
+        week = _int_or_none(row.get("week")) or 0
+        seen = latest.get(gsis_id)
+        if seen is None or week >= seen[0]:
+            latest[gsis_id] = (week, row)
+
+        key = (gsis_id, franchise)
+        stint = stints.get(key)
+        if stint is None:
+            stints[key] = {
+                "gsis_id": gsis_id,
+                "season": season,
+                "franchise": franchise,
+                "team": row.get("team"),
+                "position": row.get("position"),
+                "jersey_number": _int_or_none(row.get("jersey_number")),
+                "first_week": week,
+                "last_week": week,
+                "weeks": 1,
+                "fetched_at": now,
+            }
+        else:
+            stint["first_week"] = min(stint["first_week"], week)
+            if week >= stint["last_week"]:
+                stint["last_week"] = week
+                # A position change mid-season is rare but real; the latest
+                # week is the one worth keeping.
+                stint["position"] = row.get("position") or stint["position"]
+                stint["jersey_number"] = (
+                    _int_or_none(row.get("jersey_number")) or stint["jersey_number"]
+                )
+            stint["weeks"] += 1
+
+    if unknown_teams:
+        # Loud rather than silent: an unmapped abbreviation means a franchise's
+        # history is incomplete, which is exactly the bug this table exists to
+        # avoid. Add it to nflverse.FRANCHISES.
+        log.error(
+            "Season %s has unmapped team codes %s; those rows were dropped",
+            season,
+            sorted(unknown_teams),
+        )
+
+    session.execute(delete(NflStint).where(NflStint.season == season))
+    if stints:
+        session.execute(insert(NflStint), list(stints.values()))
+
+    _upsert_nfl_players(session, season, latest, now)
+    log.info("nflverse %s: %s players, %s stints", season, len(latest), len(stints))
+    return len(stints)
+
+
+def _upsert_nfl_players(
+    session: Session,
+    season: int,
+    latest: dict[str, tuple[int, dict[str, Any]]],
+    now: dt.datetime,
+) -> None:
+    """Store player identity, letting the most recent season win.
+
+    The `where` clause is what makes that true regardless of call order:
+    re-syncing 2019 on its own must not overwrite a player's 2026 name and
+    position with his 2019 ones.
+    """
+    for gsis_id, (_week, row) in latest.items():
+        full_name = row.get("full_name") or ""
+        values = {
+            "gsis_id": gsis_id,
+            "full_name": full_name,
+            "first_name": row.get("first_name") or None,
+            "last_name": row.get("last_name") or None,
+            "name_key": _normalize_name(full_name),
+            "last_name_key": _normalize_name(row.get("last_name")),
+            "position": row.get("position") or None,
+            "birth_date": row.get("birth_date") or None,
+            "college": row.get("college") or None,
+            "entry_year": _int_or_none(row.get("entry_year")),
+            "rookie_year": _int_or_none(row.get("rookie_year")),
+            "draft_club": row.get("draft_club") or None,
+            "draft_number": _int_or_none(row.get("draft_number")),
+            "first_season": season,
+            "last_season": season,
+            "sleeper_id": row.get("sleeper_id") or None,
+            "espn_id": row.get("espn_id") or None,
+            "pfr_id": row.get("pfr_id") or None,
+            "headshot_url": row.get("headshot_url") or None,
+            "fetched_at": now,
+        }
+        stmt = insert(NflPlayer).values(**values)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[NflPlayer.gsis_id],
+            set_={k: v for k, v in values.items() if k not in ("gsis_id", "first_season")},
+            where=NflPlayer.last_season <= season,
+        )
+        session.execute(stmt)
+
+
+def _refresh_player_spans(session: Session) -> None:
+    """Recompute first/last season from the stints, and drop orphans.
+
+    These two columns are denormalised so every result line can print a career
+    span without a second query, which means they are only ever as correct as
+    the last thing that recomputed them. Deriving them from nfl_stint here —
+    rather than tracking them incrementally during the load — is what keeps
+    them right after a season is re-synced or the window moves on.
+    """
+    session.execute(
+        delete(NflPlayer).where(
+            ~select(NflStint.gsis_id)
+            .where(NflStint.gsis_id == NflPlayer.gsis_id)
+            .exists()
+        )
+    )
+    session.execute(
+        update(NflPlayer).values(
+            first_season=(
+                select(func.min(NflStint.season))
+                .where(NflStint.gsis_id == NflPlayer.gsis_id)
+                .scalar_subquery()
+            ),
+            last_season=(
+                select(func.max(NflStint.season))
+                .where(NflStint.gsis_id == NflPlayer.gsis_id)
+                .scalar_subquery()
+            ),
+        )
+    )

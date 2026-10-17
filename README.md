@@ -1,11 +1,17 @@
 # Fantasy Football Dashboard
 
-A private dashboard for a Sleeper fantasy football league, self-hosted and
-exposed to leaguemates through a Cloudflare Tunnel.
+A private dashboard for a **12-team superflex PPR dynasty** league on Sleeper,
+self-hosted and exposed to leaguemates through a Cloudflare Tunnel. The league's
+constitution lives in [`rulebook/`](rulebook/); the lineup is
+`QB · RB · RB · WR · WR · WR · TE · FLEX · FLEX · SUPERFLEX`, with **no K and no
+DEF** — which is why neither appears anywhere in the player pool.
 
-**Current scope:** ingests the league and its members from the Sleeper API on a
-5-minute timer and renders them. Standings, matchups, power rankings, and
-transactions are intended to land additively on top of this.
+**Current scope:** ingests the league, its members, its rosters, its future
+pick ledger and its draft from the Sleeper API on a 5-minute timer and renders
+them — standings, a draft board, a members directory, and a rosters page
+showing each team's lineup, bench, taxi squad, IR and rookie picks against the
+dynasty rankings. Matchups, power rankings and transactions are intended to
+land additively on top of this.
 
 ## Stack
 
@@ -38,10 +44,16 @@ terminal `npm --prefix frontend run dev` — Vite proxies `/api` to port 8000.
 
 | Command | Purpose |
 |---|---|
-| `uv run ffd sync` | Fetch the league and members into SQLite |
+| `uv run ffd sync` | Fetch the league, members, rosters, picks and draft into SQLite |
+| `uv run ffd sync-players` | Refresh the Sleeper player pool (daily at most) |
+| `uv run ffd import-rankings` | Import the dynasty ranking exports from `data/` |
+| `uv run ffd sync-vegas <file>` | Import Vegas season projections |
 | `uv run ffd status` | Show recent sync runs |
 | `uv run ffd backup` | Write a verified snapshot, prune old ones |
 | `uv run ffd restore <file>` | Replace the database with a backup |
+| `uv run ffd sync-nfl-rosters` | Load NFL active-roster history from nflverse |
+| `uv run ffd roster-check <team> <names...>` | Split a list of players into who did and didn't play for that team |
+| `uv run ffd roster-search <name>` | Search the roster history |
 | `uv run pytest` | Run the test suite |
 | `uv run ruff check .` | Lint |
 
@@ -56,6 +68,15 @@ itself, so concurrent writes can't happen. Ingestion failures surface in
 identically — it can't distinguish the commissioner from anyone else. An
 in-app sync endpoint sitting behind it would therefore be an admin action any
 member could fire, so the manual trigger is the CLI, gated by shell access.
+
+**Roster history is active players only.** `nfl_stint` stores one row per
+player, franchise and season, built from nflverse's *weekly* roster files with
+only `ACT` rows kept — practice squad, IR and cut players are read and
+discarded. Weekly rather than season-level because the season file collapses a
+player to one team, so a mid-season trade would vanish from the other team's
+history. Relocations are folded into a single `franchise` (OAK and LV are both
+LV) while `team` keeps the abbreviation that season actually used, so a query
+for the Raiders spans all ten years and a 2018 result still reads "OAK".
 
 **Every table keeps a `raw` payload.** When a later feature needs a Sleeper
 field that isn't modelled yet, it can be backfilled from stored data rather than
@@ -72,6 +93,20 @@ in two ways worth knowing before touching the ingest code:
   is `metadata.avatar`, a full URL, stored as `league_user.avatar_url` and
   preferred by the UI. Rendering from the id alone gives several people the same
   picture. Migration `6cdb67962daf` backfilled it from `raw` with no re-fetch.
+- `/league/<id>/traded_picks` is a ledger of *exceptions*, not holdings: a pick
+  nobody has traded never appears, because every roster owns its own picks in
+  every future draft. `/api/rosters` walks the tradeable window
+  (`rulebook/08-trades.md` §8.3) applying the ledger over that default. Its ids
+  are **roster** ids, not user ids, and `roster_id` is the pick's original
+  owner while `owner_id` is whoever holds it now. A reversed trade *disappears*
+  from the endpoint rather than reappearing with its old owner, which is why
+  the sync deletes rows Sleeper no longer reports — an empty list included.
+- `/league/<id>/rosters` returns four flat lists of player ids and **no bench**:
+  the bench is `players` minus `starters`, `taxi` and `reserve`, and
+  `/api/rosters` derives it. `starters` is *positional* against the league's
+  `roster_positions`, with the string `"0"` for an empty lineup slot, so it must
+  never be sorted. Points arrive split across two integers — `fpts` 1234 with
+  `fpts_decimal` 56 means 1234.56 — and are recombined on the way in.
 
 **UTC everywhere.** SQLAlchemy's `DateTime(timezone=True)` silently returns
 *naive* datetimes on SQLite, so all timestamp columns use a `UtcDateTime` type
@@ -93,8 +128,14 @@ systemd units, and the backup/restore procedure.
 
 ```
 backend/app/       FastAPI app, models, CLI, Sleeper client, ingestion
+backend/app/dynasty.py   parsers for the four dynasty ranking exports
+backend/app/nflverse.py  nflverse client, franchise aliases
+backend/app/api/         the routes (api/rosters.py is the fantasy rosters)
+backend/app/rosters.py   NFL roster-history queries (read-only)
 backend/migrations Alembic
 frontend/src/      React SPA
 tests/             pytest + respx (no network)
+data/              the database, and the ranking exports to import
+rulebook/          the league constitution
 deploy/            systemd units and deployment docs
 ```

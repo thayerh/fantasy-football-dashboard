@@ -4,7 +4,7 @@ import { Freshness } from "../components/Freshness";
 import { Rail } from "../components/Rail";
 import { StandingsPanel } from "../components/StandingsPanel";
 import { humanStatus } from "../format";
-import { useDraft, useHealth, useLeague, useUsers } from "../queries";
+import { useDraft, useHealth, useLeague, useRosters, useUsers } from "../queries";
 
 export const STANDINGS = "Standings";
 
@@ -15,6 +15,9 @@ export function StandingsPage() {
   // The rail's "Up next" card wants the draft's schedule. Same query key as the
   // draft page, so React Query serves it from cache when you navigate.
   const draft = useDraft();
+  // Where records and points live. The same cache entry the rosters page uses,
+  // so the two pages cannot disagree about a team's record.
+  const rosters = useRosters();
 
   // The database is fine, it is simply empty. Telling someone to run
   // `ffd sync` is more useful than a red box.
@@ -68,6 +71,7 @@ export function StandingsPage() {
           <StandingsPanel
             league={league.data}
             users={users.data}
+            rosters={rosters.data?.teams}
             isPending={users.isPending}
             error={users.isError ? (users.error as Error) : null}
           />

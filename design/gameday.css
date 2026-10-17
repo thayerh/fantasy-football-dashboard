@@ -515,7 +515,11 @@ body {
   transition: background var(--dur) var(--ease);
 }
 .rail-link:hover { background: var(--unc-cloud); }
-.rail-link[aria-current="page"] {
+/* Matched on the attribute rather than its value: a nav link is
+   aria-current="page", while the roster page's team switcher is
+   aria-current="true" — it selects, it does not navigate. Both are "the one
+   you are on", and both get the same edge. */
+.rail-link[aria-current] {
   border-left-color: var(--unc-carolina);
   background: var(--unc-cloud);
   color: var(--text-strong);
@@ -696,8 +700,6 @@ body {
 .board-cell.pos-rb { background: var(--pos-rb); }
 .board-cell.pos-wr { background: var(--pos-wr); }
 .board-cell.pos-te { background: var(--pos-te); }
-.board-cell.pos-k { background: var(--pos-k); }
-.board-cell.pos-def { background: var(--pos-def); }
 
 /* On a tinted cell the muted grey drops below 3:1. Everything goes navy, and
    hierarchy is carried by size and weight instead of colour. */
@@ -710,8 +712,8 @@ body {
    across fifteen cells fights the position tints instead of helping. */
 .draft-board tbody tr:hover { background: transparent; }
 
-/* Keepers: navy edge, not Ginkgo — Ginkgo is now the kicker's colour, and a
-   marker that collides with a position tint marks nothing. */
+/* Keepers: navy edge rather than a tint of its own, which would collide with
+   the position colours and mark nothing. */
 .board-cell.is-keeper { box-shadow: inset 3px 0 0 var(--unc-navy); }
 .board-cell.is-empty .pick-no { color: var(--unc-flat-gray); }
 
@@ -750,8 +752,6 @@ body {
 .pos-key .k-rb { background: var(--pos-rb); }
 .pos-key .k-wr { background: var(--pos-wr); }
 .pos-key .k-te { background: var(--pos-te); }
-.pos-key .k-k { background: var(--pos-k); }
-.pos-key .k-def { background: var(--pos-def); }
 
 /* ===========================================================================
    BEST AVAILABLE
@@ -815,24 +815,42 @@ body {
 .pos-chip.pos-rb { background: var(--pos-rb); }
 .pos-chip.pos-wr { background: var(--pos-wr); }
 .pos-chip.pos-te { background: var(--pos-te); }
-.pos-chip.pos-k { background: var(--pos-k); }
-.pos-chip.pos-def { background: var(--pos-def); }
 
 /* Without hints the player column absorbs every spare pixel and pushes the
-   rest to the far edge of a 96rem panel. */
+   rest to the far edge of a 96rem panel. The five rank columns are left
+   unhinted on purpose: they hold three or four digits each and should size
+   themselves, so a wide one never squeezes the others out of alignment. */
 .available-table .col-pos { width: 9rem; }
 .available-table .col-team,
-.available-table .col-bye,
-.available-table .col-tier { width: 6rem; }
-.available-table .col-adp { width: 7.5rem; }
-.available-table .col-ecr { width: 5.5rem; }
-.available-table .col-proj { width: 6rem; }
-.available-table .col-lead { width: 6.5rem; }
-/* The leading measure is right-aligned, so .stat-table's generous left padding
-   only pushes it away from the panel edge and leaves a gap wide enough to read
-   as a missing column. The right side keeps the standard gutter. */
-.available-table thead th.col-lead,
-.available-table td.col-lead { padding-left: var(--space-3); }
+.available-table .col-age,
+.available-table .col-tier { width: 4.5rem; }
+.available-table .col-value { width: 6rem; }
+.available-table .col-proj { width: 5rem; }
+
+/* The column the table is sorted by. Navy on the header and tabular figures
+   in the body — the ranking chips already spend navy on "selected", and this
+   is the same selection seen from the other end, so it should look the same.
+
+   Marked rather than moved. A column that jumps to the front when you pick its
+   tab would make the five boards impossible to compare across, which is the
+   one thing this table exists for. */
+.available-table th.is-sorted {
+  color: var(--text-strong);
+  border-bottom: 2px solid var(--unc-navy);
+}
+.available-table td.is-sorted {
+  font-weight: 600;
+  color: var(--text-strong);
+  background: var(--unc-cloud);
+}
+
+/* "/2" after an aggregate: this mean is over two boards, not three. Smaller
+   and muted, because it qualifies the number rather than competing with it. */
+.of-sources {
+  margin-left: 1px;
+  font-size: var(--step--1);
+  color: var(--text-muted);
+}
 
 /* --- Where your picks land -----------------------------------------------
    The slot you draft from, and a rule across the table wherever one of your
@@ -885,9 +903,124 @@ body {
   font-size: var(--step-0);
   letter-spacing: 0.01em;
 }
+/* The rookie mark.
+ *
+ * Amber Ink rather than Ginkgo, which is the obvious gold and is now free
+ * since kickers left the pool. Ginkgo on white is about 1.7:1 — under the 3:1
+ * that a graphic carrying meaning needs, and this one carries meaning: it is
+ * the only thing on the row that says "six more years of this asset". Amber
+ * Ink is the theme's readable gold, already paired with Coastal Sand on the
+ * injury pill below, and clears 8:1.
+ *
+ * The colour is never the only signal — the glyph itself is one, and it is
+ * labelled for screen readers. */
+.rookie {
+  margin-left: var(--space-2);
+  color: var(--unc-amber-ink);
+  font-size: var(--step--1);
+  /* The row's line box is set by the name beside it; without this the star
+     nudges tall rows a pixel taller than short ones. */
+  line-height: 1;
+  vertical-align: baseline;
+}
+
 /* Coastal Sand with amber ink: the same measured pair the stale pill uses. */
 .tag.injury {
   margin-left: var(--space-3);
   background: var(--unc-coastal-sand);
   color: var(--text-on-warn);
+}
+
+/* =========================================================================
+   ROSTERS
+   -------------------------------------------------------------------------
+   A team switcher in the rail and two roster tables beside it. Both reuse the
+   existing table and rail components; what is new here is a control that is a
+   button rather than a link, and a table whose first column is a lineup slot.
+   ========================================================================= */
+
+/* The switcher's rows. A button inherits none of a link's type and brings a
+   border of its own, so those are the only two things reset — everything else
+   comes from .rail-link, including the Carolina edge on the current one, which
+   outranks this rule (attribute selectors count as classes). */
+button.rail-link {
+  width: 100%;
+  font-family: "Open Sans", sans-serif;
+  font-size: var(--step-0);
+  font-weight: 600;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+}
+
+/* Avatar and name together on the left, record on the right. The name is the
+   only part that may shrink: a fifteen-character team name in a 15.5rem rail
+   has to end in an ellipsis rather than push the record off the card. */
+.rail-team { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+.rail-team-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rail-record {
+  font-family: "Oswald", sans-serif;
+  font-weight: 600;
+  font-size: var(--step--1);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+/* The lineup slot a row sits in. Deliberately *not* a .pos-chip: the player's
+   own position already carries a tint two columns over, and a second tinted
+   chip on the same row would make a WR in a flex look like two positions. */
+.slot-label {
+  font-family: "Oswald", sans-serif;
+  font-weight: 600;
+  font-size: var(--step--1);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Without hints the player column takes every spare pixel. The slot column is
+   sized for TAXI, the widest label. */
+.roster-table .col-slot { width: 5rem; }
+.roster-table .col-pos { width: 5rem; }
+.roster-table .col-team,
+.roster-table .col-age,
+.roster-table .col-agg,
+.roster-table .col-proj { width: 4.5rem; }
+
+/* The other team on a draft-pick row. "Own" is the default case and recedes;
+   a name means the pick changed hands, which is the thing worth reading. */
+.pick-from.is-own { color: var(--text-muted); }
+
+/* Picks that have left. Muted as a whole row, because it is a record of
+   something this team no longer has rather than an asset it holds. Old Well
+   Basin is 5.87:1 on white, so the whole row stays readable. */
+.picks-gone td { color: var(--text-muted); }
+
+/* Bench, taxi and IR are three <tbody> groups in one table. The hairline
+   between rows is 1px; this is the same line at double weight, which is what
+   separates a group from a row without inventing a second kind of divider.
+   It has to outrank .stat-table tbody tr:first-child { border-top: 0 }. */
+.roster-table tbody + tbody tr:first-child td {
+  border-top: 2px solid var(--unc-fordham);
+}
+
+/* =========================================================================
+   MEMBERS
+   -------------------------------------------------------------------------
+   The card grid finally has a page. Everything it needs already existed —
+   .grid, .card, .avatar, .team, .handle, .tag — except one line.
+   ========================================================================= */
+
+/* A member's season in one line under their handle: how full their roster is,
+   how much FAAB they have left. Muted and small, because it qualifies the
+   person named above it rather than competing with them, and tabular so the
+   figures line up down a column of cards. */
+.card-facts {
+  margin: var(--space-2) 0 0;
+  font-size: var(--step--1);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }

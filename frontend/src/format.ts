@@ -48,13 +48,17 @@ export function humanStatus(status: string | null | undefined): string {
  *
  * relativeAge() rounds everything under 90 seconds to "just now", which is the
  * right answer for a five-minute sync and useless for a board that reloads
- * every twenty seconds.
+ * every two seconds.
  */
 export function liveAge(iso: string | null, now: number = Date.now()): string {
   if (!iso) return "never";
 
   const seconds = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000));
-  if (seconds < 5) return "just now";
+  // Two, not five. At a 2s poll a five-second floor would pin the board's
+  // freshness on "just now" permanently, and a permanently reassuring
+  // indicator cannot tell you the poller has stopped — which is the one thing
+  // it is on the page to say.
+  if (seconds < 2) return "just now";
   if (seconds < 60) return `${seconds}s ago`;
 
   const minutes = Math.round(seconds / 60);

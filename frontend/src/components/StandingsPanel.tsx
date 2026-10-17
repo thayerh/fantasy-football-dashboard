@@ -1,36 +1,27 @@
-import { avatarUrl, type League, type LeagueUser } from "../api/client";
+import { type League, type LeagueUser, type Roster } from "../api/client";
+import { Avatar } from "./Avatar";
 import { humanStatus } from "../format";
 
 /**
  * The homepage's primary box.
  *
- * Records and points are NOT in the database: v1 ingests the league and its
- * members, and the Sleeper roster endpoint — which is where wins, losses and
- * points live — isn't synced yet. The columns are rendered anyway, empty, so
- * the page shows what it will be rather than hiding it; the footnote says why
- * they're empty. Inventing 0–0 would be presenting a guess as data.
+ * Records and points come from the roster sync, which is also what the rosters
+ * page reads — one number, one source. Before the first game they are all
+ * zero, and a column of 0.0 is furniture rather than information, so until
+ * somebody has played the columns stay empty and the footnote says why.
+ * Presenting a league-wide 0–0 as a standing would be presenting nothing as
+ * data.
+ *
+ * Rows are ordered by member name, not by record. Sorting a standings table by
+ * standing is the right thing and is not done here yet — it wants the tiebreak
+ * rules from the rulebook (§4), not just a descending sort.
  */
-
-function Avatar({ user }: { user: LeagueUser }) {
-  const url = avatarUrl(user);
-  if (!url) {
-    // Sleeper members without an uploaded image get their initial, not a
-    // stock silhouette that makes twelve people look identical.
-    const initial = (user.display_name ?? user.username ?? "?").charAt(0).toUpperCase();
-    return (
-      <span className="avatar avatar--sm avatar--initial" aria-hidden>
-        {initial}
-      </span>
-    );
-  }
-  return <img className="avatar avatar--sm" src={url} alt="" loading="lazy" />;
-}
 
 function TeamCell({ user }: { user: LeagueUser }) {
   const handle = user.display_name ?? user.username ?? user.user_id;
   return (
     <div className="cell-team">
-      <Avatar user={user} />
+      <Avatar user={user} name={user.display_name ?? user.username} />
       <div className="who">
         <p className={user.team_name ? "name" : "name unset"}>
           {user.team_name ?? "Team name not set"}
@@ -44,12 +35,41 @@ function TeamCell({ user }: { user: LeagueUser }) {
   );
 }
 
-/** Placeholder for a figure the database doesn't have yet. */
+/** Placeholder for a figure that exists but says nothing yet. */
 function Pending() {
   return (
-    <span className="pending" title="Arrives with roster sync, once the season starts">
+    <span className="pending" title="Arrives with the season's first games">
       —
     </span>
+  );
+}
+
+/** A team's row of figures, once there is a season to report. */
+function Figures({ roster }: { roster: Roster | undefined }) {
+  if (!roster) {
+    return (
+      <>
+        <td className="num">
+          <Pending />
+        </td>
+        <td className="num">
+          <Pending />
+        </td>
+        <td className="num">
+          <Pending />
+        </td>
+      </>
+    );
+  }
+  return (
+    <>
+      <td className="num">
+        {roster.wins}–{roster.losses}
+        {roster.ties > 0 && `–${roster.ties}`}
+      </td>
+      <td className="num">{roster.fpts?.toFixed(1) ?? <Pending />}</td>
+      <td className="num">{roster.fpts_against?.toFixed(1) ?? <Pending />}</td>
+    </>
   );
 }
 
@@ -85,15 +105,23 @@ function SkeletonRows() {
 export function StandingsPanel({
   league,
   users,
+  rosters,
   isPending,
   error,
 }: {
   league: League | undefined;
   users: LeagueUser[] | undefined;
+  rosters: Roster[] | undefined;
   isPending: boolean;
   error: Error | null;
 }) {
   const meta = league ? `${league.season} · ${humanStatus(league.status)}` : "";
+  // Until somebody has played, every roster reads 0–0 and 0.0, which is true
+  // and worth nothing. The columns fill themselves the week that changes.
+  const played = (rosters ?? []).some(
+    (roster) => roster.wins + roster.losses + roster.ties > 0,
+  );
+  const byOwner = new Map((rosters ?? []).map((roster) => [roster.owner_id, roster]));
 
   return (
     <section className="panel">
@@ -156,15 +184,7 @@ export function StandingsPanel({
                     <td>
                       <TeamCell user={user} />
                     </td>
-                    <td className="num">
-                      <Pending />
-                    </td>
-                    <td className="num">
-                      <Pending />
-                    </td>
-                    <td className="num">
-                      <Pending />
-                    </td>
+                    <Figures roster={played ? byOwner.get(user.user_id) : undefined} />
                   </tr>
                 ))
               )}
@@ -174,13 +194,13 @@ export function StandingsPanel({
       )}
 
       {/* The footnote explains empty columns, so it only belongs where there
-          are columns to explain. */}
-      {!error && (
+          are empty columns to explain. */}
+      {!error && !played && (
         <div className="panel-foot">
           <p className="note">
-            Records and points are empty because the roster endpoint isn&rsquo;t synced yet
-            {league?.status === "pre_draft" && " — and the league is still pre-draft, so nobody has played a game"}
-            .
+            Records and points are empty because nobody has played a game yet. They fill in
+            from the first week of the season
+            {league?.status === "pre_draft" && ", and this league is still pre-draft"}.
           </p>
         </div>
       )}

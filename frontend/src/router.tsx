@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 /**
- * Two pages' worth of routing, and no more.
+ * Four pages' worth of routing, and no more.
  *
  * A router library buys parameterised routes, nested layouts and loaders —
  * none of which exist here yet. This is the minimum that gives each page a
@@ -21,6 +21,8 @@ const POP = "popstate";
 export const ROUTES: Record<string, string> = {
   Standings: "/",
   Draft: "/draft",
+  Rosters: "/rosters",
+  Members: "/members",
 };
 
 export function usePath(): string {

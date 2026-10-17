@@ -1,5 +1,5 @@
 [Unit]
-Description=Poll the Sleeper draft board every 20 seconds
+Description=Poll the Sleeper draft board every 2 seconds
 # Only worth running on draft day. Enable it before the draft and stop it
 # afterwards; ffd-sync (every 5 minutes) also syncs the draft, so the board
 # stays current — just not live — with this timer off.
@@ -12,11 +12,14 @@ Description=Poll the Sleeper draft board every 20 seconds
 
 [Timer]
 OnBootSec=30s
-OnUnitActiveSec=20s
-# Deliberately NOT Persistent: catching up missed 20-second runs is pointless,
-# the next poll is always seconds away.
+OnUnitActiveSec=2s
+# Deliberately NOT Persistent: catching up missed runs is pointless, the next
+# poll is always a second or two away.
 Persistent=false
-AccuracySec=1s
+# Tighter than the interval it is timing. systemd's default AccuracySec is a
+# whole minute, and even the old 1s would let a 2s period drift to 3s — half
+# again as long as asked for.
+AccuracySec=100ms
 Unit=ffd-draft.service
 
 [Install]

@@ -1,0 +1,17 @@
+[Unit]
+Description=Weekly refresh of NFL active-roster history
+# Rosters change on transaction days, not continuously, and the file is ~15 MB.
+# Wednesday morning catches the week's cuts, signings and elevations after
+# Tuesday's transaction deadline, before anyone looks at the dashboard.
+#
+# Templated on the season, so it is started with the year:
+#   systemctl --user start ffd-rosters@2026.timer
+
+[Timer]
+OnCalendar=Wed 08:00
+Persistent=true
+RandomizedDelaySec=30min
+Unit=ffd-rosters@%i.service
+
+[Install]
+WantedBy=timers.target

@@ -14,7 +14,7 @@ from sqlalchemy import select
 
 from app.db import session_scope
 from app.ingest import sync_vegas_projections
-from app.models import Draft, Player, PlayerProjection, PlayerRanking
+from app.models import Draft, DynastyRanking, Player, PlayerProjection
 from app.vegas import VegasParseError, parse_projections
 
 LEAGUE_ID = "999999999999999999"
@@ -196,8 +196,8 @@ def test_available_carries_the_projection(db, settings):
 
     _seed_pool()
     with session_scope() as s:
-        s.add(PlayerRanking(player_id="1234", ecr_overall=2, ecr_position=1))
-        s.add(PlayerRanking(player_id="6813", ecr_overall=9, ecr_position=1))
+        s.add(DynastyRanking(source="fantasypros", player_id="1234", overall_rank=2))
+        s.add(DynastyRanking(source="fantasypros", player_id="6813", overall_rank=9))
         s.add(Draft(draft_id="d1", league_id=LEAGUE_ID, raw={}))
         s.commit()
     with session_scope() as s:
@@ -218,7 +218,7 @@ def test_the_projection_survives_a_position_filter(db, settings):
 
     _seed_pool()
     with session_scope() as s:
-        s.add(PlayerRanking(player_id="1234", ecr_overall=2, ecr_position=1))
+        s.add(DynastyRanking(source="fantasypros", player_id="1234", overall_rank=2))
         s.add(Draft(draft_id="d1", league_id=LEAGUE_ID, raw={}))
         s.commit()
     with session_scope() as s:

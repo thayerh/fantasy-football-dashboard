@@ -9,25 +9,111 @@ to re-derive the same join.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
-from sqlalchemy import func, null, select
+from sqlalchemy import Select, func, null, select
 
 from app.config import get_settings
 from app.db import DbSession
+from app.dynasty import ALL_SOURCES, CONSENSUS_SOURCES, FANTASYCALC, FANTASYPROS, SLEEPER_ADP
 from app.models import (
     Draft,
     DraftPick,
+    DynastyRanking,
     LeagueUser,
     Player,
-    PlayerAdp,
     PlayerProjection,
-    PlayerRanking,
 )
 from app.schemas import DraftOut, DraftPickOut, DraftSlotOut, PlayerOut
 
 router = APIRouter(tags=["draft"])
+
+#: The boards a client may order by. `aggregate` is not a source — it is the
+#: mean of CONSENSUS_SOURCES, computed per request.
+AGGREGATE = "aggregate"
+BOARDS = (AGGREGATE, *ALL_SOURCES)
+
+#: What each position filter actually admits.
+#:
+#: FLEX and SUPERFLEX are the league's own lineup slots (§2.1), so the filter
+#: answers "who can I put in this slot" rather than "who plays this position",
+#: which is the question a superflex owner is really asking on draft night.
+#:
+#: FB is folded into RB — and therefore into both flexes — because Sleeper
+#: files a fullback as position FB with fantasy_positions ["RB"]. He is a
+#: running back everywhere it matters, and the ranking sources file him as one.
+POSITION_GROUPS: dict[str, tuple[str, ...]] = {
+    "RB": ("RB", "FB"),
+    "FLEX": ("RB", "FB", "WR", "TE"),
+    "SUPERFLEX": ("QB", "RB", "FB", "WR", "TE"),
+}
+
+
+def _positions_for(filter_: str) -> tuple[str, ...]:
+    wanted = filter_.upper()
+    return POSITION_GROUPS.get(wanted, (wanted,))
+
+
+def consensus_ranks() -> Select:
+    """Each player's mean rank across the consensus boards, and how many ranked him.
+
+    Public because the rosters route needs the same number: "the aggregate"
+    has to mean one thing in this app, and two selects that both average some
+    ranking columns would be one refactor away from quietly disagreeing.
+
+    Computed per request and never stored. The alternative — a materialised
+    average column — is a number that silently goes wrong the moment one of the
+    three exports is re-imported and the other two are not, which is the normal
+    case: they are downloaded by hand, on different days.
+
+    Sleeper ADP is excluded, deliberately and by construction (see
+    `dynasty.CONSENSUS_SOURCES`). It is what the market *did*, not what anyone
+    thinks; averaging it in would fold the thing the rankings are being read
+    against into the rankings themselves.
+
+    A player ranked by only one of the three gets that one rank as his mean,
+    which flatters deep players that a single board happens to like. That is
+    why `sources` is returned beside it rather than hidden: "3rd, on one board
+    of three" is a different claim from "3rd on all three", and the table says
+    which it is.
+    """
+    return (
+        select(
+            DynastyRanking.player_id.label("player_id"),
+            func.avg(DynastyRanking.overall_rank).label("consensus"),
+            func.count().label("sources"),
+        )
+        .where(DynastyRanking.source.in_(CONSENSUS_SOURCES))
+        .group_by(DynastyRanking.player_id)
+    )
+
+
+def _board(board: str) -> Select:
+    """(player_id, rank) for whichever board is doing the ordering."""
+    if board == AGGREGATE:
+        agg = consensus_ranks().subquery()
+        return select(agg.c.player_id.label("player_id"), agg.c.consensus.label("rank"))
+    return select(
+        DynastyRanking.player_id.label("player_id"),
+        DynastyRanking.overall_rank.label("rank"),
+    ).where(DynastyRanking.source == board)
+
+
+def _from(
+    opinions: dict[str, DynastyRanking], attr: str, *preferred: str
+) -> DynastyRanking | None:
+    """The first board that actually publishes `attr` for this player.
+
+    Preference order first, then anyone else. The distinction that matters is
+    *has an opinion* rather than *has a row*: a Sleeper ADP row exists for most
+    players and carries no tier, no value and no positional label, so asking it
+    first and stopping there would empty three columns on that one tab.
+    """
+    ordered = [opinions.get(source) for source in preferred] + list(opinions.values())
+    return next(
+        (row for row in ordered if row is not None and getattr(row, attr) is not None), None
+    )
 
 
 @router.get("/api/draft", response_model=DraftOut)
@@ -68,11 +154,18 @@ def get_draft(db: DbSession) -> DraftOut:
         )
 
     # Every pick carries what the market thought of the player, so the board can
-    # show what each pick cost relative to ADP and to consensus rank.
+    # show what each pick cost: where Sleeper drafters actually took him,
+    # against the aggregate of the dynasty boards.
+    adp = (
+        select(DynastyRanking.player_id, DynastyRanking.overall_rank.label("adp"))
+        .where(DynastyRanking.source == SLEEPER_ADP)
+        .subquery()
+    )
+    consensus = consensus_ranks().subquery()
     picks = db.execute(
-        select(DraftPick, PlayerAdp.adp, PlayerRanking.ecr_overall)
-        .outerjoin(PlayerAdp, PlayerAdp.player_id == DraftPick.player_id)
-        .outerjoin(PlayerRanking, PlayerRanking.player_id == DraftPick.player_id)
+        select(DraftPick, adp.c.adp, consensus.c.consensus)
+        .outerjoin(adp, adp.c.player_id == DraftPick.player_id)
+        .outerjoin(consensus, consensus.c.player_id == DraftPick.player_id)
         .where(DraftPick.draft_id == draft.draft_id)
         .order_by(DraftPick.pick_no)
     ).all()
@@ -89,8 +182,10 @@ def get_draft(db: DbSession) -> DraftOut:
         fetched_at=draft.fetched_at,
         slots=slots,
         picks=[
-            DraftPickOut.model_validate(pick).model_copy(update={"adp": adp, "ecr": ecr})
-            for pick, adp, ecr in picks
+            DraftPickOut.model_validate(pick).model_copy(
+                update={"adp": pick_adp, "consensus": round(cons, 1) if cons else None}
+            )
+            for pick, pick_adp, cons in picks
         ],
     )
 
@@ -98,41 +193,42 @@ def get_draft(db: DbSession) -> DraftOut:
 @router.get("/api/draft/available", response_model=list[PlayerOut])
 def list_available(
     db: DbSession,
-    position: Annotated[str | None, Query(description="QB, RB, WR, TE, K or DEF")] = None,
-    sort: Annotated[
-        Literal["ecr", "adp"],
-        Query(description="Rank by FantasyPros consensus, or by Sleeper ADP."),
-    ] = "ecr",
+    position: Annotated[
+        str | None,
+        Query(description="QB, RB, WR, TE, FLEX (RB/WR/TE) or SUPERFLEX (QB/RB/WR/TE)."),
+    ] = None,
+    board: Annotated[
+        str,
+        Query(description=f"Which ranking to order by: one of {', '.join(BOARDS)}."),
+    ] = AGGREGATE,
     limit: Annotated[int, Query(ge=1, le=300)] = 150,
 ) -> list[PlayerOut]:
     """Best available: the player pool minus everyone already drafted.
 
-    Two orderings, because "best" has two defensible answers on draft night.
-    `ecr` is what the experts think, `adp` is what the room will actually do,
-    and the gap between them is where a draft is won — which is why the ECR
-    column shows that gap under either ordering.
+    Five orderings, because in dynasty "best" has no single answer: three
+    published boards disagree about it by design, the Sleeper market disagrees
+    with all three, and the aggregate is the average of the three that are
+    opinions rather than outcomes.
 
-    Each sort admits only the players it can rank: sorting by ADP over players
-    who have none would be sorting by nothing. Sleeper's pool carries every
-    rostered player in the league, so without that rule a position tab would
+    **Every row carries every board's rank whichever one is ordering.** That is
+    the point of the page — a player the aggregate has 14th and Sleeper drafters
+    take 40th is the actual find, and you cannot see him on a table that shows
+    one number.
+
+    Each board admits only the players it ranks: ordering by a board over
+    players it has never heard of would be ordering by nothing. Sleeper's pool
+    carries every rostered player, so without that rule a position tab would
     fill to the limit with third-stringers instead of running out honestly.
-    A position filter therefore returns fewer than the overall limit, and
-    `adp` returns fewer than `ecr` — ~270 players carry an ADP against ~515
-    ranked.
 
-    Ordering is always done over the **whole** pool by the overall measure, and
-    a position filter subsets that run order rather than re-ranking it. Within
-    a position the two give the same sequence — FantasyPros' positional rank is
-    derived from the overall one — but only the pool ordering can number the
-    rows, and `expected_pick` is that number turned into a pick. Without it a
-    filtered tab could not say where a pick lands, because it cannot see how
-    many players of other positions go ahead of it.
-
-    `ecr` still reports the positional rank when filtered, since that is the
-    rank the query asked about. `pos_rank` is the label FantasyPros published
-    ("WR12") and is not recomputed against who is still available — it answers
-    "how good is this player" rather than "how many are left".
+    Ordering is always done over the **whole** pool, and a position filter
+    subsets that run order rather than re-ranking it. Only the pool ordering can
+    number the rows, and `expected_pick` is that number turned into a pick.
+    Without it a filtered tab could not say where a pick lands, because it
+    cannot see how many players of other positions go ahead of it.
     """
+    if board not in BOARDS:
+        raise HTTPException(status_code=422, detail=f"Unknown board {board!r}.")
+
     league_id = get_settings().sleeper_league_id
 
     drafted = (
@@ -145,10 +241,8 @@ def list_available(
     #
     # Not "the picks made so far", and emphatically not the highest pick number
     # on the board: keepers are written in at the pick they cost, often rounds
-    # ahead of the draft. This league's board holds twelve keepers as far out
-    # as pick 174 with the draft yet to start, so counting up from the last
-    # pick number would project the next player at 175. A keeper is also a pick
-    # nobody spends, so the run order has to step over it rather than count it.
+    # ahead of the draft. A keeper is also a pick nobody spends, so the run
+    # order has to step over it rather than count it.
     assigned = set(
         db.scalars(
             select(DraftPick.pick_no)
@@ -164,26 +258,7 @@ def list_available(
     ).first()
     total = (shape.rounds or 0) * (shape.teams or 0) if shape else 0
 
-    if sort == "adp":
-        # Ties in ADP are common — the page rounds to whole picks — so the
-        # consensus breaks them rather than leaving the order arbitrary.
-        ranked = PlayerAdp.adp.is_not(None)
-        ordering = (
-            PlayerAdp.adp,
-            PlayerRanking.ecr_overall.is_(None),
-            PlayerRanking.ecr_overall,
-            Player.full_name,
-        )
-    else:
-        ranked = PlayerRanking.player_id.is_not(None)
-        ordering = (
-            # NULLs last at each level, without relying on a dialect default.
-            PlayerRanking.ecr_overall.is_(None),
-            PlayerRanking.ecr_overall,
-            Player.search_rank.is_(None),
-            Player.search_rank,
-            Player.full_name,
-        )
+    ordering_board = _board(board).subquery()
 
     # The run order over the whole undrafted pool, numbered. Numbering before
     # the position filter is the point: row 1 of the QB tab still knows how
@@ -191,50 +266,70 @@ def list_available(
     pool = (
         select(
             Player.player_id.label("player_id"),
-            func.row_number().over(order_by=ordering).label("ordinal"),
+            func.row_number()
+            .over(order_by=(ordering_board.c.rank, Player.full_name))
+            .label("ordinal"),
         )
-        .outerjoin(PlayerRanking, PlayerRanking.player_id == Player.player_id)
-        .outerjoin(PlayerAdp, PlayerAdp.player_id == Player.player_id)
-        .where(Player.player_id.not_in(drafted), ranked)
+        .join(ordering_board, ordering_board.c.player_id == Player.player_id)
+        .where(Player.player_id.not_in(drafted))
         .subquery()
     )
 
     # The projection joins here and nowhere else. It takes no part in the pool
     # subquery above, so importing or clearing it cannot shift `expected_pick`.
+    consensus = consensus_ranks().subquery()
     query = (
-        select(Player, PlayerRanking, PlayerAdp.adp, PlayerProjection.points, pool.c.ordinal)
+        select(
+            Player,
+            PlayerProjection.points,
+            consensus.c.consensus,
+            consensus.c.sources,
+            pool.c.ordinal,
+        )
         .join(pool, pool.c.player_id == Player.player_id)
-        .outerjoin(PlayerRanking, PlayerRanking.player_id == Player.player_id)
-        .outerjoin(PlayerAdp, PlayerAdp.player_id == Player.player_id)
         .outerjoin(PlayerProjection, PlayerProjection.player_id == Player.player_id)
+        .outerjoin(consensus, consensus.c.player_id == Player.player_id)
     )
     if position:
-        query = query.where(Player.position == position.upper())
+        query = query.where(Player.position.in_(_positions_for(position)))
 
     rows = db.execute(query.order_by(pool.c.ordinal).limit(limit)).all()
 
-    # Nothing carries the chosen measure at this position (an IDP slot, or a
-    # sync that has not run yet): fall back to Sleeper's own order rather than
+    # Nothing on this board at this position (an export not imported yet, or a
+    # position no source covers): fall back to Sleeper's own order rather than
     # showing an empty tab. There is no run order to speak of here, so the rows
-    # carry no projection rather than an invented one.
+    # carry no projected pick rather than an invented one.
     if not rows:
         fallback = (
             select(
-                Player, PlayerRanking, PlayerAdp.adp, PlayerProjection.points,
+                Player,
+                PlayerProjection.points,
+                consensus.c.consensus,
+                consensus.c.sources,
                 null().label("ordinal"),
             )
-            .outerjoin(PlayerRanking, PlayerRanking.player_id == Player.player_id)
-            .outerjoin(PlayerAdp, PlayerAdp.player_id == Player.player_id)
             .outerjoin(PlayerProjection, PlayerProjection.player_id == Player.player_id)
+            .outerjoin(consensus, consensus.c.player_id == Player.player_id)
             .where(Player.player_id.not_in(drafted))
         )
         if position:
-            fallback = fallback.where(Player.position == position.upper())
+            fallback = fallback.where(Player.position.in_(_positions_for(position)))
         rows = db.execute(
             fallback.order_by(
                 Player.search_rank.is_(None), Player.search_rank, Player.full_name
             ).limit(limit)
         ).all()
+
+    # Every board's opinion of the players actually being returned, in one
+    # query. Four outer joins onto the main select would say the same thing and
+    # be unreadable, and this way a fifth source needs no query change at all.
+    opinions: dict[str, dict[str, DynastyRanking]] = {}
+    player_ids = [player.player_id for player, *_ in rows]
+    if player_ids:
+        for row in db.scalars(
+            select(DynastyRanking).where(DynastyRanking.player_id.in_(player_ids))
+        ).all():
+            opinions.setdefault(row.player_id, {})[row.source] = row
 
     # The run order lands on the open picks in turn: first player available at
     # the next unspent pick, second at the one after, and so on. Past the last
@@ -244,26 +339,47 @@ def list_available(
     open_picks = [n for n in range(1, ceiling + 1) if n not in assigned][:needed]
     projected = dict(enumerate(open_picks, start=1))
 
-    return [
-        PlayerOut(
-            player_id=player.player_id,
-            full_name=player.full_name,
-            position=player.position,
-            team=player.team,
-            injury_status=player.injury_status,
-            years_exp=player.years_exp,
-            age=player.age,
-            search_rank=player.search_rank,
-            ecr=(ranking.ecr_position if position else ranking.ecr_overall) if ranking else None,
-            ecr_overall=ranking.ecr_overall if ranking else None,
-            tier=ranking.tier if ranking else None,
-            bye_week=ranking.bye_week if ranking else None,
-            pos_rank=ranking.pos_rank if ranking else None,
-            rank_min=ranking.rank_min if ranking else None,
-            rank_max=ranking.rank_max if ranking else None,
-            adp=adp,
-            expected_pick=projected.get(ordinal) if ordinal is not None else None,
-            vegas_points=vegas,
+    out: list[PlayerOut] = []
+    for player, vegas, cons, sources, ordinal in rows:
+        by_source = opinions.get(player.player_id, {})
+
+        # The detail columns are deliberately **not** tied to the board in
+        # play. They come from whichever board publishes each thing, so the
+        # columns hold still while the tabs change — which is the whole point
+        # of a page built for comparing boards. Tying them to the active tab
+        # blanks Tier on four tabs of five and the value on two, which reads
+        # as missing data rather than as a difference between the exports.
+        detail = _from(by_source, "tier", FANTASYPROS)
+        spread = _from(by_source, "rank_min", FANTASYPROS)
+        # A value only on the two boards that price players rather than order
+        # them, and the active one wins between those two — their scales are
+        # different currencies and are not comparable with each other.
+        priced = _from(by_source, "value", board, FANTASYCALC)
+        labelled = _from(by_source, "pos_rank", board, FANTASYPROS)
+
+        out.append(
+            PlayerOut(
+                player_id=player.player_id,
+                full_name=player.full_name,
+                position=player.position,
+                team=player.team,
+                injury_status=player.injury_status,
+                years_exp=player.years_exp,
+                age=player.age,
+                search_rank=player.search_rank,
+                ranks={source: row.overall_rank for source, row in by_source.items()},
+                consensus=round(cons, 1) if cons is not None else None,
+                consensus_sources=sources or 0,
+                tier=detail.tier if detail else None,
+                pos_rank=labelled.pos_rank if labelled else None,
+                value=priced.value if priced else None,
+                rank_min=spread.rank_min if spread else None,
+                rank_max=spread.rank_max if spread else None,
+                # Whichever board has one. Only FantasyPros and FantasyCalc
+                # publish an age, and they agree to within a year.
+                ranked_age=(age.age if (age := _from(by_source, "age")) else None),
+                expected_pick=projected.get(ordinal) if ordinal is not None else None,
+                vegas_points=vegas,
+            )
         )
-        for player, ranking, adp, vegas, ordinal in rows
-    ]
+    return out

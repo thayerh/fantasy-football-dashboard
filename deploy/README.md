@@ -14,17 +14,16 @@ ffd-draft.timer ──▶ ffd-draft.service (oneshot: `ffd sync-draft`) ──�
 ffd-api.service (uvicorn, long-running) ─── reads only ─────────────┘
                                                     ▲
 ffd-backup.timer  ──▶ ffd-backup.service            │
-ffd-players.timer ──▶ ffd-players.service          │
-ffd-rankings.timer ─▶ ffd-rankings.service         │
+ffd-players.timer ──▶ ffd-players.service           │
                                                     │
 cloudflared (ffd-tunnel.service) ──▶ 127.0.0.1:8000 ┘
 ```
 
 The sync processes are the **only** writers, and the API never writes. A
 oneshot service cannot overlap itself, so neither timer can stack two runs of
-its own job. The two write disjoint tables — `ffd sync` the league and members,
-`ffd sync-draft` the draft and its picks — and SQLite's WAL plus a 5s
-`busy_timeout` covers the moment they overlap each other.
+its own job. The two write disjoint tables — `ffd sync` the league, its members
+and its rosters, `ffd sync-draft` the draft and its picks — and SQLite's WAL
+plus a 5s `busy_timeout` covers the moment they overlap each other.
 
 ## 1. First-time setup
 
@@ -101,7 +100,7 @@ cp deploy/ffd-*.service deploy/ffd-*.timer ~/.config/systemd/user/
 systemctl --user daemon-reload
 
 systemctl --user enable --now ffd-api ffd-tunnel ffd-sync.timer ffd-backup.timer \
-                             ffd-players.timer ffd-rankings.timer
+                             ffd-players.timer
 
 # The draft board's fast poll. Deliberately NOT enabled by default — see below.
 # systemctl --user start ffd-draft.timer
@@ -133,103 +132,80 @@ Run it once before the draft if the timer has never fired:
 uv run ffd sync-players
 ```
 
-## FantasyPros rankings
+## Dynasty rankings
 
-`ffd sync-rankings` fills the "best available" ordering with FantasyPros
-consensus (ECR). Run `ffd sync-players` first — rankings are stored against
-Sleeper player ids — and the table is replaced outright each time, so the
-newest fetch is the truth.
-
-**Two sources, and the default is the scrape.**
-
-| | `--source web` (default) | `--source api` |
-|---|---|---|
-| what | the public PPR cheat sheet | the JSON API |
-| players | **~515**, the complete set | ~60 |
-| extras | expert spread (min/max/ave/std) | — |
-| cost | 1 HTTP request | 7 of 50 daily API calls |
-| risk | breaks if the page changes | supported interface |
-
-The cheat-sheet page renders its table from an embedded JSON blob with the same
-shape the API returns, so the scraper reads the blob rather than the markup —
-no dependence on class names or how many rows the page chose to draw. It fails
-loudly if the blob is missing, because a silent empty result would look like
-"nothing is ranked today".
-
-The API path stays as the fallback. Its free tier caps every response at ten
-players and ignores a `limit` parameter, so it needs one call per position and
-still returns a fraction of the board.
+`ffd import-rankings` fills the "best available" ordering. It reads **files**,
+not services: the four boards are exports you download by hand, so there is no
+timer behind them and nothing pretends the numbers are fresher than your last
+import. Run `ffd sync-players` first — rankings are stored against Sleeper
+player ids.
 
 ```bash
-uv run ffd sync-rankings                  # scrape, 1 request
-uv run ffd sync-rankings --source api     # fallback, 7 API calls
+uv run ffd import-rankings                        # every *.csv in data/
+uv run ffd import-rankings ~/Downloads/board.csv  # or one file
 ```
 
-Two things to know about the matching, since the two databases disagree:
+**Four boards, and one average of three of them.**
 
-* Names are reconciled by a ladder — name+position, then name alone
-  (FantasyPros files fullbacks as RB), then last name+team (nicknames:
-  "Hollywood Brown" is Sleeper's "Marquise Brown"), then team abbreviation for
-  defenses (FantasyPros says JAC, Sleeper says JAX). Ambiguity always loses: a
-  rung finding two candidates falls through rather than guessing.
-* Misses are logged, not hidden. Today that is one free agent out of 517, plus
-  one collision where two ranked players share a name and Sleeper lists one.
+| source | what it is | rows |
+|---|---|---|
+| `fantasypros` | FantasyPros dynasty consensus, with tiers and the expert spread | ~410 |
+| `fantasycalc` | FantasyCalc dynasty trade values | ~400 |
+| `thetradecalc` | TheTradeCalc startup board, priced for 12-team superflex PPR | ~600 |
+| `sleeper-adp` | where Sleeper drafters actually take him | ~280 |
 
-Scraping is a weaker footing than the API: FantasyPros' terms may not permit
-it, and the page's shape is not a contract. That is why the request is made
-once a day with a real User-Agent, and why the API path is kept working.
+The dashboard's **Aggregate** tab is the mean of the first three, computed per
+request and never stored — an average of four snapshots taken on different days
+goes wrong quietly the moment one is re-imported. Sleeper ADP is left out of it
+deliberately: it is what the room *did*, and folding an outcome into an average
+of opinions would double-count the very thing the rankings are read against.
 
-## ADP
+Each import replaces only its own source's rows, so refreshing one export
+leaves the other three untouched.
 
-`ffd sync-adp` stores average draft position, which the draft board uses to
-show what each pick cost against the market. It runs from the same daily unit
-as the rankings.
+*Identification.* Files are recognised by their **header**, not their name, so
+a download that landed as `rankings (1).csv` still imports as what it is. A
+header matching none of the four fails loudly rather than importing as
+something else — which is what you want both for a stray file in `data/` and
+for an export whose format has changed.
 
-**It is Sleeper's own ADP** — the market this league actually drafts in — and it
-comes from rendering FantasyPros' real-time ADP page in a headless browser:
+*Matching.* Names are reconciled by a ladder — Sleeper id where the export
+carries one (FantasyCalc does, so it matches exactly), then name+position, then
+name alone (several sources file fullbacks as RB while Sleeper says FB), then
+last name+team, then last name+position. That last rung exists for the Sleeper
+ADP export, which has no team column at all; without it, five players are lost
+to first-name nicknames — Cam Ward, Cam Skattebo, Kenny Gainwell, Chig Okonkwo,
+Tank Dell. Ambiguity always loses: a rung finding two candidates falls through
+rather than guessing between two real players.
 
-```
-uv run ffd sync-adp                # --source web, the default: ~270 players
-uv run ffd sync-adp --source api   # fallback: 7 API calls, ~60 players
-```
+*Misses are logged, not hidden.* Today: 3 of 413 on FantasyPros, 0 of 398 on
+FantasyCalc, 0 of 281 on Sleeper ADP, and 12 of 611 on TheTradeCalc — almost
+all of them undrafted rookies and deep free agents Sleeper's pool does not
+carry, plus one collision where two ranked players share a name.
 
-The two sources are **different numbers, not different sample sizes of the same
-one**: `web` is Sleeper alone, `api` is FantasyPros' average across five
-platforms. `player_adp.source` records which is in the table, and each sync
-replaces the table outright so it never holds a mix.
+## No kickers, no defenses
 
-*Why a browser is needed.* The cheat sheet embeds its rankings as JSON in the
-HTML, so `httpx` is enough for `sync-rankings`. The ADP page does not — it ships
-an empty table and fills it in from JavaScript, so fetching the HTML returns
-nothing. Rendering it is the only way to read the Sleeper column.
+The league starts neither ([§2.1](../rulebook/02-rosters-and-lineups.md)), so
+they are filtered out at ingestion in `ingest.FANTASY_POSITIONS` rather than in
+every query. The `a7c1e9d40b52` migration cleared the 111 kickers, 32 defenses
+and one punter already stored; the filter is what stops the next
+`ffd sync-players` putting them back.
 
-*Why we render the page rather than calling the endpoint it calls.* That page
-authenticates its own request to `api.fantasypros.com/v2/...` with a key
-embedded in its JavaScript. The key is FantasyPros', not ours, and using it
-would be borrowing their credential to get past the limits on ours. Loading the
-page in a browser is what the page is served for; reading the table it draws is
-not the same act.
-
-*The browser.* Playwright drives the system Google Chrome if it is installed,
-which is why `playwright install` is not a deployment step here. On a host
-without Chrome, run `uv run playwright install chromium` once. A scrape takes
-about three seconds.
-
-*Coverage.* ~270 players carry a Sleeper ADP, against ~515 ranked. Every player
-with an ADP also has a ranking, so a pick inside the top 270 shows both board
-stats and one beyond it shows neither.
-
-*Fragility.* The page's shape is not a contract, so the extractor finds the
-Sleeper column by its **header text** rather than its position — FantasyPros can
-reorder the table without breaking this. If the column disappears entirely the
-sync fails loudly rather than silently storing an empty set, and
-`--source api` is the way back until the extractor is fixed.
+The filter reads `fantasy_positions`, not `position`, which is what keeps the
+35 fullbacks — Sleeper files them as position FB with fantasy_positions `["RB"]`
+and they are real flex bodies.
 
 ## Draft day
 
-`ffd-draft.timer` polls the draft board every 20 seconds. It is the one timer
-that is not enabled by default, because a process every 20 seconds all year to
+`ffd-draft.timer` polls the draft board every 2 seconds. It is the one timer
+that is not enabled by default, because a process every 2 seconds all year to
 watch a draft that happens once is waste, not resilience.
+
+The browser's own refetch (`DRAFT_REFRESH_MS` in `frontend/src/queries.ts`) is
+set to the same 2 seconds and has to stay that way. The page cannot see
+Sleeper; it re-reads what this timer last wrote. Polling the API faster than
+the ingest only re-reads identical rows, and polling it slower leaves picks
+sitting in the database unshown.
 
 ```bash
 systemctl --user start ffd-draft.timer     # before the draft
@@ -238,10 +214,12 @@ systemctl --user stop  ffd-draft.timer     # afterwards
 ```
 
 With it off the board still updates — `ffd sync` carries the draft too — just
-at five-minute resolution instead of twenty seconds. Costs, for reference: each
-run makes three Sleeper requests (~9/minute against a documented ceiling near
-1000), and a completed draft with every pick already stored skips the picks
-request, so leaving the timer on after the draft is harmless if you forget.
+at five-minute resolution instead of two seconds. Costs, for reference: each
+run makes three Sleeper requests (~90/minute against a documented ceiling near
+1000) and takes about 0.8s, so a run finishes well inside its own 2s window and
+a oneshot cannot stack. A completed draft with every pick already stored skips
+the picks request, so leaving the timer on after the draft is harmless if you
+forget — but stop it anyway, since 2s all year is ~43,000 wakeups a day.
 
 The board's freshness comes from `draft.fetched_at`, shown in the page header —
 `ffd sync-draft` writes no `sync_run` row, which at this cadence would add
@@ -252,6 +230,7 @@ The board's freshness comes from `draft.fetched_at`, shown in the page header �
 | Task | Command |
 |---|---|
 | Sync now | `systemctl --user start ffd-sync` |
+| Re-import rankings | `uv run ffd import-rankings` |
 | Recent syncs | `uv run ffd status` |
 | Back up now | `systemctl --user start ffd-backup` |
 | Tail ingestion logs | `journalctl --user -u ffd-sync -n 50` |
@@ -321,3 +300,23 @@ port. `curl localhost:8000/api/health` locally to tell the two apart.
 
 **"No frontend build ... serving API only" in the logs.** Run
 `npm --prefix frontend run build`.
+
+## NFL roster history
+
+`ffd sync-nfl-rosters` loads active-roster history from nflverse. The ten-season
+backfill is a one-time ~150 MB download, run by hand:
+
+```
+uv run ffd sync-nfl-rosters --seasons 2017-2026
+```
+
+In season only the current year changes, so the timer is templated on it and
+fetches one ~15 MB file a week:
+
+```
+systemctl --user enable --now ffd-rosters@2026.timer
+```
+
+Start the new year's timer each September and stop the old one; nothing else
+needs re-running, because finished seasons do not change. If nflverse corrects
+an old season, re-run just that one — `--seasons 2021` replaces its rows.

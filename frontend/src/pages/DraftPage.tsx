@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 import { ApiError, type Draft } from "../api/client";
 import { AvailablePlayers } from "../components/AvailablePlayers";
-import { DraftBoard } from "../components/DraftBoard";
+import { DraftBoard, boardRounds } from "../components/DraftBoard";
 import { FieldHead } from "../components/FieldHead";
 import { liveAge, localDateTime } from "../format";
 import { useDraft } from "../queries";
@@ -15,11 +15,9 @@ const POSITIONS: [string, string][] = [
   ["RB", "k-rb"],
   ["WR", "k-wr"],
   ["TE", "k-te"],
-  ["K", "k-k"],
-  ["DEF", "k-def"],
 ];
 
-/** Re-render on a clock so "18s ago" counts up between the 20s refetches. */
+/** Re-render on a clock so "3s ago" counts up between the 2s refetches. */
 function useTick(ms = 1000): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -52,7 +50,8 @@ export function DraftPage() {
   const notIngested =
     draft.isError && draft.error instanceof ApiError && draft.error.status === 503;
   const made = draft.data?.picks.length ?? 0;
-  const total = (draft.data?.rounds ?? 0) * (draft.data?.teams ?? 0);
+  const rounds = draft.data ? boardRounds(draft.data) : 0;
+  const total = rounds * (draft.data?.teams ?? 0);
   const live = draft.data?.status === "drafting";
 
   return (
@@ -65,7 +64,7 @@ export function DraftPage() {
             <span className="skeleton skeleton--sub" />
           ) : draft.data ? (
             <>
-              <b>{draft.data.teams ?? "—"}</b> teams · <b>{draft.data.rounds ?? "—"}</b> rounds ·{" "}
+              <b>{draft.data.teams ?? "—"}</b> teams · <b>{rounds || "—"}</b> rounds ·{" "}
               {draft.data.type ?? "unknown format"}
             </>
           ) : (
@@ -149,7 +148,7 @@ export function DraftPage() {
           </p>
           <p className="note">
             {live
-              ? "Refreshing every 20 seconds while the draft is live."
+              ? "Refreshing every 2 seconds while the draft is live."
               : "Keepers are marked with a navy edge; the rest fills in on draft day."}
           </p>
           </div>

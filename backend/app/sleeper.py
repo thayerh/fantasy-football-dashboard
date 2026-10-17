@@ -94,6 +94,23 @@ class SleeperClient:
     def get_league_users(self, league_id: str) -> list[dict[str, Any]]:
         return self._get(f"/league/{league_id}/users")
 
+    def get_league_rosters(self, league_id: str) -> list[dict[str, Any]]:
+        """One entry per team: who owns it, who is on it, and its record.
+
+        Returned even before the draft, when every roster is empty but the
+        owner and waiver order are already real.
+        """
+        return self._get(f"/league/{league_id}/rosters")
+
+    def get_traded_picks(self, league_id: str) -> list[dict[str, Any]]:
+        """The pick ledger: every future rookie pick that has changed hands.
+
+        Only the *traded* ones. A pick nobody has traded is implicit — every
+        roster owns its own picks in every future draft — so the full holdings
+        are this list applied to that assumption.
+        """
+        return self._get(f"/league/{league_id}/traded_picks")
+
     def get_players(self, sport: str = "nfl") -> dict[str, Any]:
         """The entire player pool — ~14 MB and ~12,000 players.
 

@@ -28,16 +28,14 @@ class Settings(BaseSettings):
     backup_dir: Path = Path("data/backups")
     backup_keep: int = 14
 
-    # FantasyPros. The free public tier allows 50 calls a day and caps every
-    # rankings response at 10 players, which is why the sync is daily and asks
-    # for one ranking set per position rather than paging through a big one.
-    fantasypros_key: str = ""
-    fantasypros_base_url: str = "https://api.fantasypros.com/public/v2/json"
-    fantasypros_scoring: str = "PPR"
-    fantasypros_timeout_seconds: float = 15.0
-    # Rendering the real-time ADP page is slower than any JSON call: a cold
-    # browser start plus the page's own data fetch. Generous on purpose.
-    fantasypros_browser_timeout_seconds: float = 45.0
+    # nflverse historical rosters. Static CSVs on GitHub releases, so there is
+    # no key and no quota; the timeout is generous because each season file is
+    # ~15 MB. `nflverse_history_seasons` is the size of the window the backfill
+    # covers, counting back from the current season inclusive.
+    nflverse_base_url: str = "https://github.com/nflverse/nflverse-data/releases/download"
+    nflverse_timeout_seconds: float = 120.0
+    nflverse_max_retries: int = 3
+    nflverse_history_seasons: int = 10
 
     stale_after_seconds: int = 900
     static_dir: Path = Path("frontend/dist")

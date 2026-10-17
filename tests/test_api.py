@@ -27,6 +27,9 @@ def spa_client(db, settings, tmp_path, monkeypatch):
     (static_dir / "assets").mkdir(parents=True)
     (static_dir / "index.html").write_text("<!doctype html><title>SPA</title>")
     (static_dir / "assets" / "app.js").write_text("console.log('app')")
+    # A public/ file: a real file with a fixed name, so it exercises the
+    # served-file branch rather than falling through to the SPA index.
+    (static_dir / "favicon.ico").write_bytes(b"\x00\x00\x01\x00")
     # The file the traversal is trying to reach, two levels above the build.
     (tmp_path / "secret.env").write_text("FFD_SECRET=canary-must-not-leak")
 
@@ -185,6 +188,26 @@ def test_static_paths_inside_the_build_are_served(tmp_path):
     assert resolved == (root / "assets" / "app.js").resolve()
     # A path inside the build that simply does not exist falls back to index.
     assert resolve_static_file(root.resolve(), "assets/missing.js") is None
+
+
+def test_the_html_revalidates_and_hashed_assets_do_not(spa_client):
+    """The two halves of a deploy actually reaching anyone.
+
+    Vite renames every asset on each build, so an asset filename can never
+    change meaning and is safe to keep for a year. index.html is the file that
+    *names* those assets and keeps a stable name of its own, so a browser that
+    caches it goes on requesting last week's bundle by name — which is exactly
+    what a missing Cache-Control produces, since browsers then invent their own
+    freshness window.
+    """
+    index = spa_client.get("/")
+    assert index.headers["cache-control"] == "no-cache"
+
+    asset = spa_client.get("/assets/app.js")
+    assert asset.headers["cache-control"] == "public, max-age=31536000, immutable"
+
+    # public/ files keep fixed names too, so they revalidate with the HTML.
+    assert spa_client.get("/favicon.ico").headers["cache-control"] == "no-cache"
 
 
 def test_spa_still_serves_real_files_and_falls_back_to_index(spa_client):

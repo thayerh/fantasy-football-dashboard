@@ -1,0 +1,56 @@
+[
+  {
+    "roster_id": 1,
+    "owner_id": "1001",
+    "league_id": "999999999999999999",
+    "co_owners": null,
+    "players": ["100", "200", "300", "400", "500", "600"],
+    "starters": ["100", "0", "300"],
+    "taxi": ["500"],
+    "reserve": ["400"],
+    "metadata": null,
+    "settings": {
+      "wins": 2,
+      "losses": 1,
+      "ties": 0,
+      "fpts": 254,
+      "fpts_decimal": 68,
+      "fpts_against": 201,
+      "fpts_against_decimal": 5,
+      "waiver_budget_used": 15,
+      "waiver_position": 3,
+      "total_moves": 4
+    }
+  },
+  {
+    "roster_id": 2,
+    "owner_id": "1002",
+    "league_id": "999999999999999999",
+    "co_owners": ["1003"],
+    "players": ["700", "800"],
+    "starters": ["700", "800"],
+    "taxi": null,
+    "reserve": null,
+    "metadata": null,
+    "settings": {
+      "wins": 0,
+      "losses": 0,
+      "ties": 0,
+      "waiver_budget_used": 0,
+      "waiver_position": 1,
+      "total_moves": 0
+    }
+  },
+  {
+    "roster_id": 3,
+    "owner_id": null,
+    "league_id": "999999999999999999",
+    "co_owners": null,
+    "players": null,
+    "starters": null,
+    "taxi": null,
+    "reserve": null,
+    "metadata": null,
+    "settings": {}
+  }
+]

@@ -33,6 +33,11 @@ def users_payload():
 
 
 @pytest.fixture
+def rosters_payload():
+    return load_fixture("rosters.json")
+
+
+@pytest.fixture
 def drafts_payload():
     return load_fixture("drafts.json")
 

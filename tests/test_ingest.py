@@ -11,7 +11,7 @@ from typer.testing import CliRunner
 from app.cli import app as cli_app
 from app.db import session_scope
 from app.ingest import sync_league, sync_users
-from app.models import Draft, League, LeagueUser, SyncRun
+from app.models import Draft, League, LeagueUser, SyncRun, TradedPick
 from app.sleeper import SleeperClient
 
 BASE = "https://api.sleeper.app/v1"
@@ -23,12 +23,22 @@ def no_sleep(monkeypatch):
     monkeypatch.setattr("app.sleeper.time.sleep", lambda _: None)
 
 
-def _mock_sleeper(league_payload, users_payload, drafts=None, draft=None, picks=None):
+def _mock_sleeper(
+    league_payload, users_payload, drafts=None, draft=None, picks=None, rosters=None, traded=None
+):
     respx.get(f"{BASE}/league/{LEAGUE_ID}").mock(
         return_value=httpx.Response(200, json=league_payload)
     )
     respx.get(f"{BASE}/league/{LEAGUE_ID}/users").mock(
         return_value=httpx.Response(200, json=users_payload)
+    )
+    # `ffd sync` reads the rosters too; roster-specific behaviour lives in
+    # test_league_rosters.py.
+    respx.get(f"{BASE}/league/{LEAGUE_ID}/rosters").mock(
+        return_value=httpx.Response(200, json=rosters if rosters is not None else [])
+    )
+    respx.get(f"{BASE}/league/{LEAGUE_ID}/traded_picks").mock(
+        return_value=httpx.Response(200, json=traded if traded is not None else [])
     )
     # `ffd sync` also syncs the draft, so the board stays current with the fast
     # ffd-draft.timer disabled. Draft-specific behaviour is in test_draft.py.
@@ -158,10 +168,25 @@ def test_departed_member_is_retained(session, settings, league_payload, users_pa
 
 @respx.mock
 def test_cli_sync_records_ok_run(
-    db, settings, league_payload, users_payload, drafts_payload, draft_payload, draft_picks_payload
+    db,
+    settings,
+    league_payload,
+    users_payload,
+    drafts_payload,
+    draft_payload,
+    draft_picks_payload,
+    rosters_payload,
 ):
     _mock_sleeper(
-        league_payload, users_payload, drafts_payload, draft_payload, draft_picks_payload
+        league_payload,
+        users_payload,
+        drafts_payload,
+        draft_payload,
+        draft_picks_payload,
+        rosters_payload,
+        traded=[
+            {"season": "2027", "round": 3, "roster_id": 1, "owner_id": 2, "previous_owner_id": 1}
+        ],
     )
     result = CliRunner().invoke(cli_app, ["sync"])
     assert result.exit_code == 0, result.output
@@ -169,12 +194,14 @@ def test_cli_sync_records_ok_run(
     with session_scope() as s:
         run = s.scalars(select(SyncRun).order_by(SyncRun.id.desc())).first()
         assert run.status == "ok"
-        # 1 league + 3 users + 1 draft + 2 picks
-        assert run.records_written == 7
+        # 1 league + 3 users + 3 rosters + 1 traded pick + 1 draft + 2 picks
+        assert run.records_written == 11
         assert run.finished_at is not None
         assert run.error is None
         # The draft rides along with the five-minute sync, not only the fast one.
         assert s.scalar(select(func.count()).select_from(Draft)) == 1
+        # So does the pick ledger, which moves whenever a roster does.
+        assert s.scalar(select(func.count()).select_from(TradedPick)) == 1
 
 
 @respx.mock

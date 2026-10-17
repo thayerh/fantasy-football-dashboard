@@ -17,7 +17,7 @@ from sqlalchemy import func, select
 
 from app.db import session_scope
 from app.ingest import sync_draft
-from app.models import Draft, DraftPick, LeagueUser, PlayerAdp, PlayerRanking
+from app.models import Draft, DraftPick, DynastyRanking, LeagueUser
 from app.sleeper import SleeperClient
 
 BASE = "https://api.sleeper.app/v1"
@@ -256,24 +256,30 @@ def test_api_reports_503_before_the_first_draft_sync(db, settings):
 
 
 def test_picks_carry_what_the_market_thought(db, settings):
-    """Each pick ships its ADP and consensus rank so the board can show what the
-    pick cost. Both are nullable — FantasyPros ranks far more players than it
-    gives ADP for, so a pick can have one and not the other."""
+    """Each pick ships its Sleeper ADP and the dynasty aggregate, so the board
+    can show what the pick cost. Both are nullable and independently so — the
+    ranking boards reach far deeper than the ADP export, which stops at 300.
+
+    The aggregate is the mean of the *consensus* boards only. Pick 20's player
+    is ranked 10 and 20 by two of them and taken 6th in the ADP export; the
+    answer is 15.0, not 12.0, which is what folding the ADP in would give."""
     from app.main import app
 
     with session_scope() as s:
         s.add(Draft(draft_id=DRAFT_ID, league_id=LEAGUE_ID, teams=4, rounds=3, raw={}))
         s.add(DraftPick(draft_id=DRAFT_ID, pick_no=20, round=2, draft_slot=1, player_id="6813"))
         s.add(DraftPick(draft_id=DRAFT_ID, pick_no=25, round=3, draft_slot=2, player_id="4034"))
-        s.add(PlayerAdp(player_id="6813", adp=6.4, adp_rank=7))
-        s.add(PlayerRanking(player_id="6813", ecr_overall=10))
-        # Ranked but no ADP: the coverage gap, which must not break the join.
-        s.add(PlayerRanking(player_id="4034", ecr_overall=14))
+        s.add(DynastyRanking(source="sleeper-adp", player_id="6813", overall_rank=6))
+        s.add(DynastyRanking(source="fantasypros", player_id="6813", overall_rank=10))
+        s.add(DynastyRanking(source="fantasycalc", player_id="6813", overall_rank=20))
+        # Ranked but past the end of the ADP export: the coverage gap, which
+        # must not break the join.
+        s.add(DynastyRanking(source="fantasypros", player_id="4034", overall_rank=14))
         s.commit()
 
     picks = {p["pick_no"]: p for p in TestClient(app).get("/api/draft").json()["picks"]}
 
-    assert picks[20]["adp"] == 6.4
-    assert picks[20]["ecr"] == 10
+    assert picks[20]["adp"] == 6
+    assert picks[20]["consensus"] == 15.0
     assert picks[25]["adp"] is None
-    assert picks[25]["ecr"] == 14
+    assert picks[25]["consensus"] == 14.0

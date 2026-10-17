@@ -9,13 +9,35 @@ import { signedGap } from "../format";
  * eventually hold — and for a snake draft that means reversing even rounds.
  */
 
-/** Positions the theme has a colour for. Anything else (IDP leagues) stays
- *  white rather than being lumped in with a position it isn't. */
-const COLOURED = new Set(["QB", "RB", "WR", "TE", "K", "DEF"]);
+/** Positions the theme has a colour for. Anything else stays white rather
+ *  than being lumped in with a position it isn't — which now includes the
+ *  kickers and defenses on the old redraft board, since this league starts
+ *  neither and the palette no longer spends a colour on them. */
+const COLOURED = new Set(["QB", "RB", "WR", "TE"]);
 
 export function positionClass(position: string | null): string {
   const pos = position?.toUpperCase() ?? "";
   return COLOURED.has(pos) ? ` pos-${pos.toLowerCase()}` : "";
+}
+
+/**
+ * How many rounds the board runs.
+ *
+ * Sleeper's `rounds` is the length the draft was *set up* for, which a
+ * commissioner can cut short — this league was configured for 26 and stopped
+ * after 20. Once a draft is complete the picks are the truth, so the board
+ * ends at the last round anyone actually made. A draft still running keeps the
+ * configured length, since there is no telling yet where it will stop.
+ */
+export function boardRounds(draft: Draft): number {
+  const configured = draft.rounds ?? 0;
+  if (draft.status !== "complete") return configured;
+
+  let last = 0;
+  for (const pick of draft.picks) {
+    if (pick.round && pick.round > last) last = pick.round;
+  }
+  return last || configured;
 }
 
 function fullName(slot: DraftSlot): string {
@@ -74,23 +96,23 @@ function Cell({ draft, round, slot, pick }: {
  * **ADP** compares the pick to the Sleeper market — negative is a reach past
  * where the room usually takes him, positive is a player who lasted (value).
  *
- * **ECR** compares the same pick to FantasyPros' consensus rank. A pick at 28
- * of a player ranked 68 reads −40: taken forty slots ahead of where the experts
- * have him.
+ * **AGG** compares the same pick to the aggregate of the three dynasty boards.
+ * A pick at 28 of a player the boards average 68th reads −40: taken forty
+ * slots ahead of where they have him.
  */
 function PickDelta({ pick }: { pick: DraftPick }) {
   const adp = signedGap(pick.pick_no, pick.adp);
-  const ecr = signedGap(pick.pick_no, pick.ecr);
-  if (adp === null && ecr === null) return null;
+  const consensus = signedGap(pick.pick_no, pick.consensus);
+  if (adp === null && consensus === null) return null;
 
   return (
     <span className="pick-delta">
       {adp !== null && (
         <span title={`Taken at ${pick.pick_no}; Sleeper ADP ${pick.adp}`}>ADP {adp}</span>
       )}
-      {ecr !== null && (
-        <span title={`Taken at ${pick.pick_no}; FantasyPros rank ${pick.ecr}`}>
-          ECR {ecr}
+      {consensus !== null && (
+        <span title={`Taken at ${pick.pick_no}; dynasty aggregate ${pick.consensus}`}>
+          AGG {consensus}
         </span>
       )}
     </span>
@@ -98,7 +120,7 @@ function PickDelta({ pick }: { pick: DraftPick }) {
 }
 
 export function DraftBoard({ draft }: { draft: Draft }) {
-  const rounds = draft.rounds ?? 0;
+  const rounds = boardRounds(draft);
   const teams = draft.teams ?? 0;
 
   // One lookup keyed by round:slot beats scanning the pick list per cell —
